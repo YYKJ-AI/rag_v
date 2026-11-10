@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ragbot — 可溯源知识库问答</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --border: #e2e5ea;
+    --text: #1a1c20; --muted: #6b7280;
+    --blue: #185fa5; --blue-bg: #e6f1fb;
+    --green: #3b6d11; --green-bg: #eaf3de;
+    --amber: #854f0b; --amber-bg: #faeeda;
+    --red: #a32d2d; --red-bg: #fcebeb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 8px 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border);
+          border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .row { display: flex; gap: 10px; }
+  input[type=text], input[type=date] {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 14px; outline: none;
+  }
+  input[type=text]:focus, input[type=date]:focus { border-color: var(--blue); }
+  input[type=date] { flex: 0 0 160px; color: var(--muted); }
+  button { padding: 10px 22px; border: 0; border-radius: 8px;
+           background: var(--blue); color: #fff; font-size: 14px; cursor: pointer; }
+  button:hover { opacity: .9; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .examples { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .examples span { display: inline-block; margin: 2px 6px 2px 0; padding: 3px 10px;
+                   background: var(--blue-bg); color: var(--blue);
+                   border-radius: 20px; cursor: pointer; }
+  .badge { display: inline-block; padding: 2px 12px; border-radius: 20px;
+           font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+  .b-answered { background: var(--green-bg); color: var(--green); }
+  .b-conflict { background: var(--amber-bg); color: var(--amber); }
+  .b-insufficient_evidence { background: var(--red-bg); color: var(--red); }
+  .answer { white-space: pre-wrap; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .cits { margin-top: 14px; }
+  .cits h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .cit { border-left: 3px solid var(--blue); background: var(--blue-bg);
+         border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 8px;
+         font-size: 13px; }
+  .cit .loc { color: var(--muted); font-size: 12px; }
+  .cit .exc { margin-top: 2px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+  .err { background: var(--red-bg); color: var(--red); padding: 8px 12px;
+         border-radius: 8px; font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ragbot · 可溯源知识库问答</h1>
+  <div class="sub">确定性检索链路 — 每条回答均附逐条出处（文档 / 版本 / 位置 / 原文摘录）</div>
+
+  <div class="card">
+    <div class="row">
+      <input type="text" id="q" placeholder="输入问题，例如：现在申请要交哪些材料"
+             onkeydown="if(event.key==='Enter')ask()">
+      <button id="btn" onclick="ask()">提问</button>
+    </div>
+    <div class="examples">试试：
+      <span onclick="fill('现在申请要交哪些材料')">现在申请要交哪些材料</span>
+      <span onclick="fill('艺术节专项经费最多能补多少钱')">经费补助上限（冲突示例）</span>
+      <span onclick="fill('艺术节可以带宠物入场吗')">可以带宠物吗（拒答示例）</span>
+      <span onclick="fill('2025年申请艺术节要准备几项材料')">2025年要几项材料（自动识别历史时点）</span>
+    </div>
+    <div id="err" class="err" style="display:none"></div>
+  </div>
+
+  <div id="result" class="card" style="display:none">
+    <span id="badge" class="badge"></span>
+    <div id="answer" class="answer"></div>
+    <div id="meta" class="meta"></div>
+    <div id="cits" class="cits"></div>
+  </div>
+
+  <div id="placeholder" class="card"><div class="empty">输入问题开始提问。所有回答均基于已导入的资料并附出处。</div></div>
+</div>
+
+<script>
+const STATUS_TEXT = {
+  answered: '已回答 · 有出处',
+  conflict: '检测到冲突 · 请人工核实',
+  insufficient_evidence: '证据不足 · 已拒答'
+};
+
+async function ask() {
+  const q = document.getElementById('q').value.trim();
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  if (!q) return;
+  const btn = document.getElementById('btn');
+  btn.disabled = true; btn.textContent = '检索中…';
+  try {
+    const resp = await fetch('/api/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: q})
+    });
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({error: resp.statusText}));
+      throw new Error(e.error || '请求失败');
+    }
+    render(await resp.json());
+  } catch (e) {
+    err.textContent = e.message; err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '提问';
+  }
+}
+
+function render(data) {
+  document.getElementById('placeholder').style.display = 'none';
+  const box = document.getElementById('result');
+  box.style.display = 'block';
+  const badge = document.getElementById('badge');
+  badge.textContent = STATUS_TEXT[data.status] || data.status;
+  badge.className = 'badge b-' + data.status;
+  document.getElementById('answer').textContent = data.answer.trim();
+  document.getElementById('meta').textContent =
+    '耗时 ' + data.latency_ms + 'ms · 生成方式 ' + data.generated_by +
+    (data.detected_time ? ' · 已从问句识别时间点，按历史有效版本回答' : '');
+  const cits = document.getElementById('cits');
+  if (!data.citations || data.citations.length === 0) {
+    cits.innerHTML = '<h3>出处</h3><div class="empty">无（拒答不捏造出处）</div>';
+    return;
+  }
+  cits.innerHTML = '<h3>出处（' + data.citations.length + ' 条）</h3>' +
+    data.citations.map(c =>
+      '<div class="cit"><div class="loc">《' + esc(c.document_id) + '》' +
+      esc(c.version) + ' · ' + esc(c.location) + '</div>' +
+      '<div class="exc">"' + esc(c.excerpt) + '"</div></div>'
+    ).join('');
+}
+
+function fill(q) {
+  document.getElementById('q').value = q;
+  ask();
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+</script>
+</body>
+</html>

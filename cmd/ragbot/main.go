@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"ragbot/internal/evaluate"
 	"ragbot/internal/ingest"
 	"ragbot/internal/retriever"
+	"ragbot/internal/server"
 	"ragbot/internal/store"
 )
 
@@ -24,6 +26,8 @@ func main() {
 	queries := flag.String("queries", "eval/queries.json", "评测查询集")
 	baseline := flag.String("baseline", "eval/baseline/latest.json", "评测结果输出")
 	asOfStr := flag.String("as-of", "", "时间点查询（2006-01-02）")
+	addrFlag := flag.String("addr", ":8080", "serve 模式监听地址")
+	webDir := flag.String("web", "web", "静态页目录")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
@@ -61,6 +65,13 @@ func main() {
 		ans := e.Answer(q, asOf)
 		b, _ := json.MarshalIndent(ans, "", "  ")
 		fmt.Println(string(b))
+	case "serve":
+		addr := *addrFlag
+		srv := server.Handler(server.Deps{Engine: newEngine(ret), Ret: ret, WebDir: *webDir})
+		fmt.Printf("ragbot 已启动: http://localhost%s （Ctrl+C 停止）\n", addr)
+		if err := http.ListenAndServe(addr, srv); err != nil {
+			die(err)
+		}
 	case "search":
 		q := flag.Arg(1)
 		if q == "" {

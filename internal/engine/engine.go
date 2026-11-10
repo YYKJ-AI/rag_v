@@ -14,8 +14,12 @@ import (
 
 // Engine 回答编排器
 type Engine struct {
-	R retrieverIface
+	R                retrieverIface
+	lastInferredTime bool // 最近一次 Answer 是否从问句推断出时间点
 }
+
+// InferredTimeTime 供 API 层报告"本次回答是否基于问句推断的时间点"
+func (e *Engine) InferredTime() bool { return e.lastInferredTime }
 
 type retrieverIface interface {
 	Search(query string, n int) []types.Hit
@@ -30,8 +34,15 @@ const (
 	alignFloor = 0.0   // 无任何句子对齐即视为没答案
 )
 
-// Answer 回答入口。asOf 非 nil 时按时间点过滤（现行态判定改为窗口判定）。
+// Answer 回答入口。asOf 参数为显式覆盖；nil 时自动从问句文本推断时间点
+// （"2025年…"→历史口径，无时间表达→现行口径）。多版本演变自动呈现时间线。
 func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
+	inferred := false
+	if asOf == nil {
+		asOf = inferQueryTime(query)
+		inferred = asOf != nil
+	}
+	e.lastInferredTime = inferred
 	hits := e.R.Search(query, 8)
 	hits = e.filterByAsOf(hits, asOf)
 	if e.weak(query, hits) {
@@ -413,12 +424,6 @@ func (e *Engine) build(evids []evidence) types.Answer {
 			continue
 		}
 		seen[ev.Sec.ID] = true
-		if first {
-			b.WriteString("根据资料：")
-			first = false
-		} else {
-			b.WriteString("另有规定：")
-		}
 		statusTag := ""
 		for _, d := range e.R.Docs() {
 			if d.ID == ev.Sec.DocID && d.Version == ev.Sec.Version {
@@ -427,6 +432,14 @@ func (e *Engine) build(evids []evidence) types.Answer {
 				}
 				break
 			}
+		}
+		if first {
+			b.WriteString("根据资料：")
+			first = false
+		} else if statusTag != "" {
+			b.WriteString("另有历史口径：")
+		} else {
+			b.WriteString("另有规定：")
 		}
 		b.WriteString(fmt.Sprintf("《%s》%s%s（%s）：\"%s\"\n",
 			docTitle(e, ev.Sec), ev.Sec.Version, statusTag, ev.Sec.SectionPath, ev.Sentence))

@@ -1,0 +1,16 @@
+[
+  {"id":"Q01","query":"申请社区艺术节需要满足什么条件","expect_docs":["art-guide"],"expect_status":"answered","note":"直接查询"},
+  {"id":"Q02","query":"报名艺术节有什么资格要求","expect_docs":["art-guide"],"expect_status":"answered","note":"同义表达：报名/申请、资格/条件"},
+  {"id":"Q03","query":"提交材料要盖什么章","expect_docs":["art-guide"],"expect_status":"answered","note":"细节定位"},
+  {"id":"Q04","query":"现在申请要交哪些材料","expect_docs":["art-guide"],"expect_status":"answered","note":"版本裁决：应引 v2 四项材料（v1 已废弃降权）"},
+  {"id":"Q05","query":"初审需要多少个工作日","expect_docs":["art-guide"],"expect_status":"answered","note":"版本裁决：v2 七个工作日；v1 历史答案应标注年度"},
+  {"id":"Q06","query":"在中央广场办活动还要办什么手续","expect_docs":["venue-notice"],"expect_status":"answered","note":"跨文档补充：报备+安全许可"},
+  {"id":"Q07","query":"中央广场舞台区要交哪些费用","expect_docs":["venue-notice","fee-standard"],"expect_status":"answered","note":"双来源合并：保证金+场租"},
+  {"id":"Q08","query":"经营性活动用中央广场舞台一天多少钱","expect_docs":["fee-standard"],"expect_status":"answered","note":"数值答案"},
+  {"id":"Q09","query":"2025年申请艺术节要准备几项材料","expect_docs":["qa-history"],"expect_status":"answered","note":"历史版本可追溯：应引历史问答/2025口径"},
+  {"id":"Q10","query":"艺术节专项经费最多能补多少钱","expect_docs":["funding-2026-cul","funding-2026-fin"],"expect_status":"conflict","note":"未裁决冲突：五千 vs 八千，无替代依据"},
+  {"id":"Q11","query":"消防培训多久组织一次","expect_docs":["fire-training"],"expect_status":"answered","note":"领域外文档精确命中"},
+  {"id":"Q12","query":"艺术节可以带宠物入场吗","expect_docs":[],"expect_status":"insufficient_evidence","note":"拒答：资料未覆盖"},
+  {"id":"Q13","query":"场地保证金什么时候退还","expect_docs":["venue-notice"],"expect_status":"answered","note":"退费规则定位"},
+  {"id":"Q14","query":"补交材料的方式有哪些","expect_docs":["art-guide"],"expect_status":"answered","note":"同义+方式渠道"}
+]

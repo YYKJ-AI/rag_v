@@ -70,7 +70,7 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 	}
 
 	// 冲突三段式：同题多来源且值不同（只在各组的"最强证据句"之间判定，防弱相关污染）
-	if groups := groupByClaim(query, evids); len(groups) > 1 {
+	if groups := e.groupByClaim(query, evids); len(groups) > 1 {
 		// 规则裁决：现行优先 → 替代关系
 		resolved := e.resolveByRules(groups, asOf)
 		if resolved != nil {
@@ -85,6 +85,8 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 type evidence struct {
 	Sentence string
 	Sec      types.Section
+	Title    string  // 所属文档标题（冲突主题门控用）
+	Score    float64 // 上下文对齐分（排序与相对截断基准）
 }
 
 func (e *Engine) extract(query string, hits []types.Hit) []evidence {
@@ -105,16 +107,34 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 			st := tokenize.Tokenize(ctx)
 			score := alignScore(q, st)
 			if score >= 0.34 { // 句子级对齐阈值（dev 集调参）
-				out = append(out, evidence{Sentence: sent, Sec: h.Section})
+				out = append(out, evidence{Sentence: sent, Sec: h.Section, Title: docTitle(e, h.Section), Score: score})
 			}
 		}
 	}
+	// 相对截断：只保留接近最强证据的句子（绝对阈值兜底），压掉长尾噪音引用
+	if len(out) > 0 {
+		best := 0.0
+		for _, ev := range out {
+			if ev.Score > best {
+				best = ev.Score
+			}
+		}
+		cut := 0.6 * best
+		if cut < absFloor {
+			cut = absFloor
+		}
+		filtered := out[:0]
+		for _, ev := range out {
+			if ev.Score >= cut {
+				filtered = append(filtered, ev)
+			}
+		}
+		out = filtered
+	}
 	// 按对齐质量稳定排序（分数相同按 SectionID，保证确定性）
 	sort.SliceStable(out, func(i, j int) bool {
-		si := alignScore(q, tokenize.Tokenize(out[i].Sentence))
-		sj := alignScore(q, tokenize.Tokenize(out[j].Sentence))
-		if si != sj {
-			return si > sj
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
 		}
 		return out[i].Sec.ID < out[j].Sec.ID
 	})
@@ -178,13 +198,17 @@ func unigramSet(toks []string) map[string]bool {
 }
 
 // groupByClaim 按"同一主题节下的不同数值结论"分组。
-// 每组只保留最强对齐的一句（冲突判定在组间最优句对上进行，防弱相关证据污染）。
-func groupByClaim(query string, evids []evidence) map[string][]evidence {
+// 每组只保留最强对齐的一句；主题门控要求命中的标题字符是"文档家族特有"
+// （低标题词频），防止"审批流程"这类查询仅凭"艺术节"通用字拖入无关冲突对。
+func (e *Engine) groupByClaim(query string, evids []evidence) map[string][]evidence {
 	q := tokenize.Expand(tokenize.Tokenize(query))
 	best := map[string]evidence{}
 	bestScore := map[string]float64{}
 	for _, ev := range evids {
 		key := ev.Sec.DocID
+		if !e.titleSpecific(query, ev.Title) {
+			continue // 主题不相关：命中的只是全库通用标题字
+		}
 		s := alignScore(q, tokenize.Tokenize(ev.Sentence))
 		if s >= bestScore[key] {
 			bestScore[key] = s
@@ -384,6 +408,27 @@ func sortedKeys(m map[string][]evidence) []string {
 	return keys
 }
 
+// titleSpecific 主题门控：问句与该文档标题命中的字符里，是否存在"文档家族特有"
+// 的字（标题词频 ≤2 份文档）——过滤"艺术节"这类全库通用字带来的假相关。
+func (e *Engine) titleSpecific(query, title string) bool {
+	qt := unigramSet(tokenize.Tokenize(query))
+	for _, t := range tokenize.Tokenize(title) {
+		if len([]rune(t)) != 1 || !qt[t] {
+			continue
+		}
+		df := 0
+		for _, d := range e.R.Docs() {
+			if strings.Contains(d.Title, t) {
+				df++
+			}
+		}
+		if df <= 2 {
+			return true
+		}
+	}
+	return false
+}
+
 // buildConflict 冲突标注：展示双方来源，交人工核实，绝不悄悄混合
 func (e *Engine) buildConflict(groups map[string][]evidence) types.Answer {
 	var b strings.Builder
@@ -505,7 +550,7 @@ func isModalQuestion(q string) bool {
 // hasModalVerdict 证据中是否存在许可/禁止性表述（"须"不算——它不回答允许与否）
 func hasModalVerdict(evids []evidence) bool {
 	for _, ev := range evids {
-		for _, m := range []string{"可以", "不得", "禁止", "允许", "不可", "无需", "无须", "免于"} {
+		for _, m := range []string{"可以", "不得", "禁止", "允许", "不可", "无需", "无须", "免于", "免收", "免除", "退还"} {
 			if strings.Contains(ev.Sentence, m) {
 				return true
 			}

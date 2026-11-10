@@ -115,6 +115,9 @@ func doIngest(st *store.Store, ret *retriever.Retriever, dir string) {
 		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".md") {
 			continue
 		}
+		if ent.Name() == "README.md" {
+			continue // 目录说明文件不是资料，跳过
+		}
 		raw, err := os.ReadFile(filepath.Join(dir, ent.Name()))
 		if err != nil {
 			die(err)

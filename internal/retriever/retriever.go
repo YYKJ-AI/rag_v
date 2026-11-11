@@ -12,6 +12,7 @@ import (
 // Retriever indexes imported chunks and returns their parent sections for citation.
 type Retriever struct {
 	docs     []*types.Document
+	verified *Retriever // 正式问答独立索引，待审核资料不影响其 BM25 统计
 	secs     map[string]*types.Section
 	inverted map[string]map[int]int // term -> chunkIdx -> tf
 	chunks   []*types.Chunk
@@ -24,6 +25,18 @@ func New() *Retriever {
 
 // Index replaces the index from a complete store snapshot; repeated calls do not duplicate data.
 func (r *Retriever) Index(docs []*types.Document, secs []*types.Section, chunks []*types.Chunk) {
+	r.index(docs, secs, chunks)
+	verifiedDocs := make([]*types.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc.Status != "needs_review" && doc.IdentityKind != "synthetic" {
+			verifiedDocs = append(verifiedDocs, doc)
+		}
+	}
+	r.verified = New()
+	r.verified.index(verifiedDocs, secs, chunks)
+}
+
+func (r *Retriever) index(docs []*types.Document, secs []*types.Section, chunks []*types.Chunk) {
 	r.docs = append([]*types.Document(nil), docs...)
 	r.secs = make(map[string]*types.Section, len(secs))
 	for _, section := range secs {
@@ -40,6 +53,14 @@ func (r *Retriever) Index(docs []*types.Document, secs []*types.Section, chunks 
 		r.chunks = append(r.chunks, &copy)
 	}
 	r.rebuild()
+}
+
+// SearchVerified searches the certified-only index used for answers and evaluation.
+func (r *Retriever) SearchVerified(query string, n int) []types.Hit {
+	if r.verified == nil {
+		return nil
+	}
+	return r.verified.Search(query, n)
 }
 
 func (r *Retriever) rebuild() {
@@ -115,6 +136,14 @@ func (r *Retriever) Search(query string, n int) []types.Hit {
 
 // Docs 供引擎做版本裁决
 func (r *Retriever) Docs() []*types.Document { return r.docs }
+
+// VerifiedDocs returns documents eligible for formal answers and version checks.
+func (r *Retriever) VerifiedDocs() []*types.Document {
+	if r.verified == nil {
+		return nil
+	}
+	return r.verified.docs
+}
 
 // Section returns the exact stored parent block for a parsed pointer target.
 func (r *Retriever) Section(id string) (types.Section, bool) {

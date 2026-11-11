@@ -15,6 +15,9 @@ go build -o ragbot.exe ./cmd/ragbot
 # 导入虚构演示资料（docs/ 内 12 份互相关联文档）
 ./ragbot.exe ingest docs
 
+# 将无规范元数据的 Markdown 作为待审核资料导入独立目录（搜索可见，不能用于正式问答）
+./ragbot.exe -allow-unstructured ingest incoming-docs
+
 # 提问（带出处）
 ./ragbot.exe ask "现在申请要提交哪些材料"
 
@@ -31,6 +34,8 @@ go build -o ragbot.exe ./cmd/ragbot
 若本机 `data/store.json` 已导入旧版演示资料，请为新版示例指定新的 `-data` 目录重新导入；同一文档版本的正文变更会被幂等检查拒绝，旧数据不会自动覆盖。
 
 ## 架构
+
+默认 `ingest` 保持严格元数据校验。加 `-allow-unstructured` 后，缺少 front-matter 或必需字段但有正文的文件以 `synthetic_<内容 SHA-256 前 12 位>@unversioned` 入库，状态为 `needs_review`；业务生效日保持未知。搜索结果会标注未认证来源，问答使用独立的已认证索引，不会引用这些资料，也不受它们的 BM25 词频影响。正文里的版本字样仅作审核提示；同名异内容独立保存并提示人工核查，不自动生成版本替代关系。损坏的 front-matter、无正文或明确但无效的日期仍报错。导入目录中的 `README.md` 仍作为目录说明跳过。
 
 ```
 入库 ingest：front-matter 打标 → SimHash 文档级指纹（幂等）→ 父子分块
@@ -96,7 +101,7 @@ go test ./...
 
 - 文档正文只作为检索数据，绝不进入指令位（当前实现无 LLM，天然免疫注入；接入 LLM 时正文用分隔符隔离）；
 - 密钥只经环境变量提供（当前实现无需任何密钥）；
-- 导入失败（缺字段/格式错误）显式报错退出，不静默成功。
+- 默认严格导入对缺字段和格式错误显式报错；显式启用宽松导入时，只对可解析正文降级，格式损坏仍报错。
 
 ## 目录
 

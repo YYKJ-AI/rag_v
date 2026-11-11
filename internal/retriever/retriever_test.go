@@ -11,6 +11,28 @@ import (
 	"ragbot/internal/types"
 )
 
+func TestSearchVerifiedIgnoresReviewCorpusStatistics(t *testing.T) {
+	date := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	official := &types.Document{ID: "official", Version: "v1", Title: "申请指南", EffectiveDate: date, Status: "active"}
+	review := &types.Document{ID: "synthetic_abc", Version: "unversioned", Title: "申请指南", Status: "needs_review", IdentityKind: "synthetic"}
+	section := &types.Section{ID: "official@v1#sec-1", DocID: "official", Version: "v1", SectionPath: "申请材料", Text: "提交身份证明材料。"}
+	reviewSection := &types.Section{ID: "synthetic_abc@unversioned#sec-1", DocID: review.ID, Version: review.Version, SectionPath: "申请材料", Text: "提交身份证明材料。"}
+	chunk := &types.Chunk{ID: "official@v1#chunk-1", SectionID: section.ID, Text: section.Text}
+	reviewChunk := &types.Chunk{ID: "synthetic_abc@unversioned#chunk-1", SectionID: reviewSection.ID, Text: reviewSection.Text}
+	base := retriever.New()
+	base.Index([]*types.Document{official}, []*types.Section{section}, []*types.Chunk{chunk})
+	mixed := retriever.New()
+	mixed.Index([]*types.Document{official, review}, []*types.Section{section, reviewSection}, []*types.Chunk{chunk, reviewChunk})
+	baseHits := base.SearchVerified("身份证明", 5)
+	mixedHits := mixed.SearchVerified("身份证明", 5)
+	if len(baseHits) != 1 || len(mixedHits) != 1 || baseHits[0].Section.ID != mixedHits[0].Section.ID || baseHits[0].Score != mixedHits[0].Score {
+		t.Errorf("SearchVerified(身份证明) base/mixed = %+v/%+v, want identical verified hit and score", baseHits, mixedHits)
+	}
+	if hits := mixed.Search("身份证明", 5); len(hits) != 2 {
+		t.Errorf("Search(身份证明) mixed hits = %d, want 2 including review document", len(hits))
+	}
+}
+
 func TestSearchUsesIngestedChunksForLongProcessAndTable(t *testing.T) {
 	longIntro := strings.Repeat("普通事项由办公室登记并存档。", 90)
 	raw := fmt.Sprintf(`---

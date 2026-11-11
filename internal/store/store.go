@@ -67,12 +67,26 @@ func (s *Store) Ingest(doc *types.Document, secs []*types.Section, chunks []*typ
 	key := doc.ID + "@" + doc.Version
 	for _, d := range s.Docs {
 		if d.ID == doc.ID && d.Version == doc.Version {
-			if d.Fingerprint == doc.Fingerprint {
+			if doc.IdentityKind == "synthetic" && d.ContentHash != doc.ContentHash {
+				return "", fmt.Errorf("合成 ID 碰撞：%s 对应不同内容", key)
+			}
+			if (doc.IdentityKind == "synthetic" && d.ContentHash == doc.ContentHash) || (doc.IdentityKind != "synthetic" && d.Fingerprint == doc.Fingerprint) {
+				if doc.IdentityKind == "synthetic" && doc.SourceName != d.SourceName && !containsName(d.Aliases, doc.SourceName) {
+					d.Aliases = append(d.Aliases, doc.SourceName)
+				}
 				s.logLocked(doc, "duplicate")
 				return "duplicate", nil // 重复导入同版本 → 幂等跳过
 			}
 			// 同 ID 同版本不同内容 → 拒绝，要求升版本号
 			return "", fmt.Errorf("版本冲突：%s 已存在且内容不同，请升版本号后重新导入", key)
+		}
+	}
+	if doc.IdentityKind == "synthetic" {
+		for _, d := range s.Docs {
+			if d.IdentityKind == "synthetic" && (d.SourceName == doc.SourceName || containsName(d.Aliases, doc.SourceName)) && d.ContentHash != doc.ContentHash {
+				doc.MetadataWarnings = append(doc.MetadataWarnings, "possible_duplicate_name")
+				break
+			}
 		}
 	}
 
@@ -102,6 +116,15 @@ func (s *Store) Ingest(doc *types.Document, secs []*types.Section, chunks []*typ
 	s.Chunks = append(s.Chunks, chunks...)
 	s.logLocked(doc, "created")
 	return "created", nil
+}
+
+func containsName(names []string, name string) bool {
+	for _, candidate := range names {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) logLocked(doc *types.Document, action string) {

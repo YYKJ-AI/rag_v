@@ -118,7 +118,7 @@ func (e *Engine) lookupPointerTarget(relation types.Relation, source types.Secti
 		return types.Section{}, false
 	}
 	var sourceDoc, targetDoc *types.Document
-	for _, doc := range e.R.Docs() {
+	for _, doc := range e.R.VerifiedDocs() {
 		if doc.ID == source.DocID && doc.Version == source.Version {
 			sourceDoc = doc
 		}
@@ -126,7 +126,7 @@ func (e *Engine) lookupPointerTarget(relation types.Relation, source types.Secti
 			targetDoc = doc
 		}
 	}
-	if sourceDoc == nil || targetDoc == nil || targetDoc.EffectiveDate.After(sourceDoc.EffectiveDate) || targetDoc.EffectiveDate.After(asOf) || !matchesScope(targetDoc.ScopeKeys, scopeKey) || !pointerScopesOverlap(sourceDoc.ScopeKeys, targetDoc.ScopeKeys) {
+	if sourceDoc == nil || targetDoc == nil || sourceDoc.Status == "needs_review" || targetDoc.Status == "needs_review" || sourceDoc.IdentityKind == "synthetic" || targetDoc.IdentityKind == "synthetic" || targetDoc.EffectiveDate.After(sourceDoc.EffectiveDate) || targetDoc.EffectiveDate.After(asOf) || !matchesScope(targetDoc.ScopeKeys, scopeKey) || !pointerScopesOverlap(sourceDoc.ScopeKeys, targetDoc.ScopeKeys) {
 		return types.Section{}, false
 	}
 	if !targetDoc.ValidUntil.IsZero() && targetDoc.ValidUntil.Before(sourceDoc.EffectiveDate) {

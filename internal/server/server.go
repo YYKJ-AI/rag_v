@@ -80,11 +80,14 @@ func Handler(d Deps) http.Handler {
 		}
 		hits := d.Ret.Search(q, n)
 		type hitOut struct {
-			DocID   string  `json:"doc_id"`
-			Version string  `json:"version"`
-			Path    string  `json:"section_path"`
-			Score   float64 `json:"score"`
-			Excerpt string  `json:"excerpt"`
+			DocID            string   `json:"doc_id"`
+			Version          string   `json:"version"`
+			Path             string   `json:"section_path"`
+			Score            float64  `json:"score"`
+			Excerpt          string   `json:"excerpt"`
+			SourceStatus     string   `json:"source_status"`
+			SourceName       string   `json:"source_name,omitempty"`
+			MetadataWarnings []string `json:"metadata_warnings,omitempty"`
 		}
 		out := make([]hitOut, 0, len(hits))
 		for _, h := range hits {
@@ -92,7 +95,16 @@ func Handler(d Deps) http.Handler {
 			if len([]rune(exc)) > 80 {
 				exc = string([]rune(exc)[:80]) + "…"
 			}
-			out = append(out, hitOut{h.Section.DocID, h.Section.Version, h.Section.SectionPath, h.Score, exc})
+			item := hitOut{DocID: h.Section.DocID, Version: h.Section.Version, Path: h.Section.SectionPath, Score: h.Score, Excerpt: exc, SourceStatus: "verified"}
+			for _, doc := range d.Ret.Docs() {
+				if doc.ID == h.Section.DocID && doc.Version == h.Section.Version && (doc.Status == "needs_review" || doc.IdentityKind == "synthetic") {
+					item.SourceStatus = "unverified"
+					item.SourceName = doc.SourceName
+					item.MetadataWarnings = doc.MetadataWarnings
+					break
+				}
+			}
+			out = append(out, item)
 		}
 		writeJSON(w, map[string]any{"hits": out})
 	})

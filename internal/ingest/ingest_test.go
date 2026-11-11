@@ -49,6 +49,13 @@ func TestParseFrontMatter(t *testing.T) {
 	}
 }
 
+func TestParseFrontMatterWithUTF8BOM(t *testing.T) {
+	meta, drafts, err := ingest.Parse([]byte("\uFEFF" + sampleDoc))
+	if err != nil || meta.ID != "art-guide" || len(drafts) != 2 {
+		t.Errorf("Parse(BOM + sampleDoc) = %+v, %d sections, %v; want art-guide, 2 sections, nil", meta, len(drafts), err)
+	}
+}
+
 func TestParseRejectsMissingFields(t *testing.T) {
 	_, _, err := ingest.Parse([]byte("没有front-matter的文档"))
 	if err == nil {
@@ -58,6 +65,50 @@ func TestParseRejectsMissingFields(t *testing.T) {
 	_, _, err = ingest.Parse([]byte(noDate))
 	if err == nil {
 		t.Fatal("缺 effective_date 应报错（版本裁决依赖）")
+	}
+}
+
+func TestParseUnstructuredCreatesReviewIdentity(t *testing.T) {
+	raw := []byte("\uFEFF# 社区活动指南\n\n## 申请条件\n申请人须提交申请表。\n\n2025年版说明。")
+	meta, drafts, err := ingest.ParseUnstructured(raw, "guide.md")
+	if err != nil {
+		t.Fatalf("ParseUnstructured(%q) error = %v", "guide.md", err)
+	}
+	if meta.IdentityKind != "synthetic" || meta.Version != "unversioned" || meta.ID == "" {
+		t.Fatalf("ParseUnstructured(%q) identity = %+v, want synthetic unversioned identity", "guide.md", meta)
+	}
+	if meta.Title != "guide" || meta.ContentHash == "" || meta.VersionHint != "2025年版" {
+		t.Fatalf("ParseUnstructured(%q) metadata = %+v, want filename title, hash and version hint", "guide.md", meta)
+	}
+	if meta.EffectiveDate != "" || len(drafts) != 1 {
+		t.Fatalf("ParseUnstructured(%q) effective date/sections = %q/%d, want empty/1", "guide.md", meta.EffectiveDate, len(drafts))
+	}
+}
+
+func TestParseUnstructuredRejectsEmptyBody(t *testing.T) {
+	if _, _, err := ingest.ParseUnstructured([]byte("# empty\n\n"), "empty.md"); err == nil {
+		t.Error("ParseUnstructured(empty.md) error = nil, want empty body error")
+	}
+}
+
+func TestParseUnstructuredPartialFrontMatter(t *testing.T) {
+	raw := []byte("---\ntitle: 补充通知\nversion: v2\neffective_date: 2025-03-01\n---\n\n## 事项\n提交证明材料。")
+	meta, drafts, err := ingest.ParseUnstructured(raw, "notice.md")
+	if err != nil {
+		t.Fatalf("ParseUnstructured(notice.md) error = %v", err)
+	}
+	if meta.Title != "补充通知" || meta.Version != "unversioned" || meta.EffectiveDate != "" || len(drafts) != 1 {
+		t.Errorf("ParseUnstructured(notice.md) = %+v, %d sections, want title, unversioned, unknown date and 1 section", meta, len(drafts))
+	}
+	badDate := strings.Replace(string(raw), "2025-03-01", "2025-02-30", 1)
+	if _, _, err := ingest.ParseUnstructured([]byte(badDate), "notice.md"); err == nil {
+		t.Error("ParseUnstructured(notice.md with invalid date) error = nil, want error")
+	}
+	if _, _, err := ingest.ParseUnstructured([]byte("---\ntitle: broken"), "broken.md"); err == nil {
+		t.Error("ParseUnstructured(broken.md with unclosed front matter) error = nil, want error")
+	}
+	if _, _, err := ingest.ParseUnstructured([]byte("---\ntitle 补充通知\n---\n## 事项\n提交材料。"), "broken.md"); err == nil {
+		t.Error("ParseUnstructured(broken.md with malformed front matter line) error = nil, want error")
 	}
 }
 

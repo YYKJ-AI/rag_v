@@ -22,8 +22,8 @@ type Engine struct {
 func (e *Engine) InferredTime() bool { return e.lastInferredTime }
 
 type retrieverIface interface {
-	Search(query string, n int) []types.Hit
-	Docs() []*types.Document
+	SearchVerified(query string, n int) []types.Hit
+	VerifiedDocs() []*types.Document
 	Section(id string) (types.Section, bool)
 }
 
@@ -55,7 +55,7 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 		today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)
 		asOf = &today
 	}
-	hits := e.filterByAsOf(e.R.Search(query, 0), asOf, scopeKey)
+	hits := e.filterByAsOf(e.R.SearchVerified(query, 0), asOf, scopeKey)
 	if len(hits) > 8 {
 		hits = hits[:8]
 	}
@@ -75,7 +75,7 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 	if clauses := splitQueryClauses(query); len(clauses) > 1 {
 		var combined []evidence
 		for _, clause := range clauses {
-			focus := stripTitleTopic(clause, e.R.Docs())
+			focus := stripTitleTopic(clause, e.R.VerifiedDocs())
 			candidates := withoutPointerDeclarations(e.extract(focus, hits))
 			if len(candidates) == 0 || needsUnsupportedReasoning(clause, candidates) || (isModalQuestion(clause) && !hasModalVerdict(candidates)) {
 				return types.Answer{Status: "insufficient_evidence", Answer: "至少一个子问题缺少可直接核验的证据，无法合并回答。"}
@@ -178,8 +178,8 @@ type evidence struct {
 }
 
 func (e *Engine) extract(query string, hits []types.Hit) []evidence {
-	focusQuery := stripTitleTopic(query, e.R.Docs())
-	topic := sharedTitleTopic(query, e.R.Docs())
+	focusQuery := stripTitleTopic(query, e.R.VerifiedDocs())
+	topic := sharedTitleTopic(query, e.R.VerifiedDocs())
 	q := tokenize.Expand(tokenize.Tokenize(focusQuery))
 	var out []evidence
 	for _, h := range hits {
@@ -481,7 +481,7 @@ func (e *Engine) businessActive(d *types.Document, asOf time.Time, scopeKey stri
 	if !d.ValidUntil.IsZero() && !asOf.Before(d.ValidUntil.AddDate(0, 0, 1)) {
 		return false
 	}
-	for _, other := range e.R.Docs() {
+	for _, other := range e.R.VerifiedDocs() {
 		if other == d || other.EffectiveDate.Before(d.EffectiveDate) || other.EffectiveDate.After(asOf) || !matchesScope(other.ScopeKeys, scopeKey) {
 			continue
 		}
@@ -524,7 +524,7 @@ func (e *Engine) titleSpecific(query, title string) bool {
 			continue
 		}
 		df := 0
-		for _, d := range e.R.Docs() {
+		for _, d := range e.R.VerifiedDocs() {
 			if strings.Contains(d.Title, t) {
 				df++
 			}
@@ -556,7 +556,7 @@ func (e *Engine) buildConflict(groups map[string][]evidence) types.Answer {
 }
 
 func docTitle(e *Engine, s types.Section) string {
-	for _, d := range e.R.Docs() {
+	for _, d := range e.R.VerifiedDocs() {
 		if d.ID == s.DocID && d.Version == s.Version {
 			return d.Title
 		}
@@ -596,9 +596,9 @@ func (e *Engine) build(evids []evidence) types.Answer {
 func (e *Engine) filterByAsOf(hits []types.Hit, asOf *time.Time, scopeKey string) []types.Hit {
 	var out []types.Hit
 	for _, h := range hits {
-		for _, d := range e.R.Docs() {
+		for _, d := range e.R.VerifiedDocs() {
 			if d.ID == h.Section.DocID && d.Version == h.Section.Version {
-				if matchesScope(d.ScopeKeys, scopeKey) && e.businessActive(d, *asOf, scopeKey) {
+				if d.Status != "needs_review" && d.IdentityKind != "synthetic" && matchesScope(d.ScopeKeys, scopeKey) && e.businessActive(d, *asOf, scopeKey) {
 					out = append(out, h)
 				}
 				break

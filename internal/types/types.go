@@ -26,21 +26,27 @@ type Relation struct {
 
 // Document 文档级打标（对应 front-matter）
 type Document struct {
-	ID            string    `json:"id"`      // 稳定 document_id
-	Version       string    `json:"version"` // v1/v2/...
-	Title         string    `json:"title"`
-	PublishDate   time.Time `json:"publish_date"`
-	EffectiveDate time.Time `json:"effective_date"`          // 业务生效时间
-	ValidUntil    time.Time `json:"valid_until,omitempty"`   // 业务有效期末日（含当天）
-	Scope         string    `json:"scope"`                   // 适用范围
-	ScopeKeys     []string  `json:"scope_keys,omitempty"`    // 机器可读适用范围键；* 表示通用
-	Nature        string    `json:"nature"`                  // 基础规范/修订通知/补充说明
-	Replaces      []string  `json:"replaces"`                // 明确替代关系 ["art-guide@v1"]
-	SupersededBy  string    `json:"superseded_by,omitempty"` // 导入时声明的反向替代关系；非当前业务状态
-	Fingerprint   uint64    `json:"fingerprint"`             // 文档级 SimHash
-	ActivatedAt   time.Time `json:"activated_at"`            // 系统时间轴 valid_from
-	SupersededAt  time.Time `json:"superseded_at,omitempty"` // 系统时间轴 valid_until
-	Status        string    `json:"status"`                  // 导入关系状态；问答按业务日期另行裁决
+	ID               string    `json:"id"`      // 稳定 document_id
+	Version          string    `json:"version"` // v1/v2/...
+	Title            string    `json:"title"`
+	PublishDate      time.Time `json:"publish_date"`
+	EffectiveDate    time.Time `json:"effective_date"`          // 业务生效时间
+	ValidUntil       time.Time `json:"valid_until,omitempty"`   // 业务有效期末日（含当天）
+	Scope            string    `json:"scope"`                   // 适用范围
+	ScopeKeys        []string  `json:"scope_keys,omitempty"`    // 机器可读适用范围键；* 表示通用
+	Nature           string    `json:"nature"`                  // 基础规范/修订通知/补充说明
+	Replaces         []string  `json:"replaces"`                // 明确替代关系 ["art-guide@v1"]
+	SupersededBy     string    `json:"superseded_by,omitempty"` // 导入时声明的反向替代关系；非当前业务状态
+	Fingerprint      uint64    `json:"fingerprint"`             // 文档级 SimHash
+	ContentHash      string    `json:"content_hash,omitempty"`  // 原始文件 SHA-256，合成身份的精确判据
+	SourceName       string    `json:"source_name,omitempty"`
+	Aliases          []string  `json:"aliases,omitempty"`
+	IdentityKind     string    `json:"identity_kind,omitempty"` // declared | synthetic
+	MetadataWarnings []string  `json:"metadata_warnings,omitempty"`
+	VersionHint      string    `json:"version_hint,omitempty"`
+	ActivatedAt      time.Time `json:"activated_at"`            // 系统时间轴 valid_from
+	SupersededAt     time.Time `json:"superseded_at,omitempty"` // 系统时间轴 valid_until
+	Status           string    `json:"status"`                  // 导入关系状态；问答按业务日期另行裁决
 }
 
 // Section 父块：引用定位的最小单位

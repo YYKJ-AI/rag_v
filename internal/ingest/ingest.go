@@ -17,16 +17,21 @@ var explicitRelationTarget = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9_.-]*@[A-Z
 
 // DocMeta front-matter 元数据
 type DocMeta struct {
-	ID            string   `json:"id"`
-	Version       string   `json:"version"`
-	Title         string   `json:"title"`
-	PublishDate   string   `json:"publish_date"`
-	EffectiveDate string   `json:"effective_date"`
-	ValidUntil    string   `json:"valid_until"`
-	Scope         string   `json:"scope"`
-	ScopeKeys     []string `json:"scope_keys"`
-	Nature        string   `json:"nature"`
-	Replaces      []string `json:"replaces"`
+	ID               string   `json:"id"`
+	Version          string   `json:"version"`
+	Title            string   `json:"title"`
+	PublishDate      string   `json:"publish_date"`
+	EffectiveDate    string   `json:"effective_date"`
+	ValidUntil       string   `json:"valid_until"`
+	Scope            string   `json:"scope"`
+	ScopeKeys        []string `json:"scope_keys"`
+	Nature           string   `json:"nature"`
+	Replaces         []string `json:"replaces"`
+	ContentHash      string   `json:"content_hash,omitempty"`
+	SourceName       string   `json:"source_name,omitempty"`
+	IdentityKind     string   `json:"identity_kind,omitempty"`
+	MetadataWarnings []string `json:"metadata_warnings,omitempty"`
+	VersionHint      string   `json:"version_hint,omitempty"`
 }
 
 // Result 单次导入结果
@@ -40,7 +45,7 @@ type Result struct {
 
 // Parse 解析 Markdown 文档：front-matter + 标题层级 + 段落
 func Parse(raw []byte) (*DocMeta, []SectionDraft, error) {
-	text := string(raw)
+	text := strings.TrimPrefix(string(raw), "\uFEFF")
 	meta := &DocMeta{}
 
 	// --- front-matter（--- 包裹的 key: value 块）---
@@ -102,6 +107,15 @@ func Parse(raw []byte) (*DocMeta, []SectionDraft, error) {
 		return nil, nil, fmt.Errorf("front-matter 缺少 effective_date（版本裁决依赖业务生效时间）")
 	}
 
+	sections, err := parseBody(body)
+	if err != nil {
+		return nil, nil, err
+	}
+	return meta, sections, nil
+}
+
+// parseBody splits a Markdown body into sections without assigning document identity.
+func parseBody(body string) ([]SectionDraft, error) {
 	// --- 正文：## 标题切父块，段切子块 ---
 	var sections []SectionDraft
 	var cur *SectionDraft
@@ -143,9 +157,9 @@ func Parse(raw []byte) (*DocMeta, []SectionDraft, error) {
 		sections = append(sections, *cur)
 	}
 	if len(sections) == 0 {
-		return nil, nil, fmt.Errorf("正文无有效内容")
+		return nil, fmt.Errorf("正文无有效内容")
 	}
-	return meta, sections, nil
+	return sections, nil
 }
 
 type SectionDraft struct {
@@ -157,15 +171,23 @@ type SectionDraft struct {
 // Build 把解析结果组装成 Document/Section/Chunk（含双指纹、块级去重）
 func Build(meta *DocMeta, drafts []SectionDraft) (*types.Document, []*types.Section, []*types.Chunk, error) {
 	doc := &types.Document{
-		ID:          meta.ID,
-		Version:     meta.Version,
-		Title:       meta.Title,
-		Scope:       meta.Scope,
-		ScopeKeys:   meta.ScopeKeys,
-		Nature:      meta.Nature,
-		Replaces:    meta.Replaces,
-		Status:      "active",
-		ActivatedAt: time.Now(),
+		ID:               meta.ID,
+		Version:          meta.Version,
+		Title:            meta.Title,
+		Scope:            meta.Scope,
+		ScopeKeys:        meta.ScopeKeys,
+		Nature:           meta.Nature,
+		Replaces:         meta.Replaces,
+		Status:           "active",
+		ActivatedAt:      time.Now(),
+		ContentHash:      meta.ContentHash,
+		SourceName:       meta.SourceName,
+		IdentityKind:     meta.IdentityKind,
+		MetadataWarnings: append([]string(nil), meta.MetadataWarnings...),
+		VersionHint:      meta.VersionHint,
+	}
+	if meta.IdentityKind == "synthetic" {
+		doc.Status = "needs_review"
 	}
 	var err error
 	if meta.PublishDate != "" {
@@ -174,16 +196,20 @@ func Build(meta *DocMeta, drafts []SectionDraft) (*types.Document, []*types.Sect
 			return nil, nil, nil, fmt.Errorf("publish_date 格式应为 2006-01-02: %w", err)
 		}
 	}
-	doc.EffectiveDate, err = parseDate(meta.EffectiveDate)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("effective_date 格式应为 2006-01-02: %w", err)
+	if meta.EffectiveDate != "" {
+		doc.EffectiveDate, err = parseDate(meta.EffectiveDate)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("effective_date 格式应为 2006-01-02: %w", err)
+		}
+	} else if meta.IdentityKind != "synthetic" {
+		return nil, nil, nil, fmt.Errorf("缺少 effective_date")
 	}
 	if meta.ValidUntil != "" {
 		doc.ValidUntil, err = parseDate(meta.ValidUntil)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("valid_until 格式应为 2006-01-02: %w", err)
 		}
-		if doc.ValidUntil.Before(doc.EffectiveDate) {
+		if !doc.EffectiveDate.IsZero() && doc.ValidUntil.Before(doc.EffectiveDate) {
 			return nil, nil, nil, fmt.Errorf("valid_until 不得早于 effective_date")
 		}
 	}

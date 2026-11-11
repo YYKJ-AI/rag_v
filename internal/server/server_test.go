@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ragbot/internal/engine"
+	"ragbot/internal/ingest"
 	"ragbot/internal/retriever"
 	"ragbot/internal/server"
 	"ragbot/internal/types"
@@ -61,5 +62,36 @@ func TestAskUsesScopeKey(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSearchMarksUnverifiedSource(t *testing.T) {
+	meta, drafts, err := ingest.ParseUnstructured([]byte("## 申请条件\n申请人须提交身份证明材料。"), "guide.md")
+	if err != nil {
+		t.Fatalf("ParseUnstructured(guide.md) error = %v", err)
+	}
+	doc, sections, chunks, err := ingest.Build(meta, drafts)
+	if err != nil {
+		t.Fatalf("Build(guide.md) error = %v", err)
+	}
+	r := retriever.New()
+	r.Index([]*types.Document{doc}, sections, chunks)
+	h := server.Handler(server.Deps{Engine: engine.New(r), Ret: r})
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/search?q=身份证明", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /api/search status = %d, want 200", response.Code)
+	}
+	var result struct {
+		Hits []struct {
+			SourceStatus string `json:"source_status"`
+			SourceName   string `json:"source_name"`
+		} `json:"hits"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatalf("json.Unmarshal(GET /api/search) error = %v", err)
+	}
+	if len(result.Hits) != 1 || result.Hits[0].SourceStatus != "unverified" || result.Hits[0].SourceName != "guide.md" {
+		t.Errorf("GET /api/search hits = %+v, want one unverified guide.md hit", result.Hits)
 	}
 }

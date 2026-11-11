@@ -9,3 +9,5 @@ project-notes/*
 !project-notes/bug.md
 !project-notes/pointer-relations.md
 !project-notes/open-issues.md
+!project-notes/unstructured-ingest.md
+!project-notes/architecture.md

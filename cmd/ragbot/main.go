@@ -27,6 +27,7 @@ func main() {
 	baseline := flag.String("baseline", "eval/baseline/latest.json", "评测结果输出")
 	asOfStr := flag.String("as-of", "", "时间点查询（2006-01-02）")
 	scopeKey := flag.String("scope-key", "", "适用范围键（文档 scope_keys 中的值）")
+	allowUnstructured := flag.Bool("allow-unstructured", false, "允许正文型 Markdown 以待审核身份降级入库")
 	addrFlag := flag.String("addr", ":8080", "serve 模式监听地址")
 	webDir := flag.String("web", "web", "静态页目录")
 	flag.Parse()
@@ -48,7 +49,7 @@ func main() {
 		if dir == "" {
 			dir = *docsDir
 		}
-		doIngest(st, ret, dir)
+		doIngest(st, ret, dir, *allowUnstructured)
 	case "ask":
 		q := flag.Arg(1)
 		if q == "" {
@@ -79,7 +80,14 @@ func main() {
 			die(fmt.Errorf("用法：ragbot search \"查询\""))
 		}
 		for i, h := range ret.Search(q, 8) {
-			fmt.Printf("%d. %.3f  %s@%s  %s\n", i+1, h.Score, h.Section.DocID, h.Section.Version, h.Section.SectionPath)
+			status := ""
+			for _, doc := range st.Docs {
+				if doc.ID == h.Section.DocID && doc.Version == h.Section.Version && (doc.Status == "needs_review" || doc.IdentityKind == "synthetic") {
+					status = " [未认证来源: " + doc.SourceName + "]"
+					break
+				}
+			}
+			fmt.Printf("%d. %.3f  %s@%s  %s%s\n", i+1, h.Score, h.Section.DocID, h.Section.Version, h.Section.SectionPath, status)
 		}
 	case "evaluate":
 		qs, err := evaluate.LoadQueries(*queries)
@@ -118,7 +126,7 @@ func newEngine(ret *retriever.Retriever) *engine.Engine {
 	return engine.New(ret)
 }
 
-func doIngest(st *store.Store, ret *retriever.Retriever, dir string) {
+func doIngest(st *store.Store, ret *retriever.Retriever, dir string, allowUnstructured bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		die(err)
@@ -137,7 +145,13 @@ func doIngest(st *store.Store, ret *retriever.Retriever, dir string) {
 		}
 		meta, drafts, err := ingest.Parse(raw)
 		if err != nil {
-			die(fmt.Errorf("%s: %w", ent.Name(), err))
+			if !allowUnstructured {
+				die(fmt.Errorf("%s: %w", ent.Name(), err))
+			}
+			meta, drafts, err = ingest.ParseUnstructured(raw, ent.Name())
+			if err != nil {
+				die(fmt.Errorf("%s: %w", ent.Name(), err))
+			}
 		}
 		doc, secs, chunks, err := ingest.Build(meta, drafts)
 		if err != nil {
@@ -148,6 +162,9 @@ func doIngest(st *store.Store, ret *retriever.Retriever, dir string) {
 			die(err)
 		}
 		fmt.Printf("  %-20s %s (%d 节 / %d 块)\n", ent.Name(), action, len(secs), len(chunks))
+		if doc.IdentityKind == "synthetic" && action == "created" {
+			fmt.Printf("    待审核：%s@%s；原因：%s\n", doc.ID, doc.Version, strings.Join(doc.MetadataWarnings, ", "))
+		}
 		n++
 	}
 	if err := st.Save(); err != nil {

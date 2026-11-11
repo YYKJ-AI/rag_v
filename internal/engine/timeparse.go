@@ -16,6 +16,10 @@ var (
 	reLastYear  = regexp.MustCompile(`去年|上一年度`)
 )
 
+// QueryHasInferredTime reports whether the question contains a valid time point.
+// It is pure and safe to use for a single HTTP request's response metadata.
+func QueryHasInferredTime(query string) bool { return inferQueryTime(query) != nil }
+
 // inferQueryTime 从问句推断时间点；无时间表达 → nil（走现行口径）。
 // 解析失败一律回退 nil，不报错——时间推断是增强不是门槛。
 func inferQueryTime(q string) *time.Time {

@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-11-11T11:59:59+08:00",
-  "total": 21,
-  "passed": 21,
-  "hit5_passed": 18,
-  "hit5_total": 18,
+  "generated_at": "2026-11-11T13:12:15+08:00",
+  "total": 22,
+  "passed": 22,
+  "hit5_passed": 19,
+  "hit5_total": 19,
   "hit5_rate": 1,
-  "cited_passed": 18,
-  "cited_total": 18,
+  "cited_passed": 19,
+  "cited_total": 19,
   "cited_rate": 1,
-  "source_passed": 18,
-  "source_total": 18,
+  "source_passed": 19,
+  "source_total": 19,
   "source_rate": 1,
   "refusal_passed": 3,
   "refusal_total": 3,
   "refusal_rate": 1,
   "refusal_ok": true,
-  "avg_latency_ms": 0.3371520952380953,
+  "avg_latency_ms": 0.3568625,
   "records": [
     {
       "id": "Q01",
@@ -42,7 +42,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.413709
+      "latency_ms": 0.40504
     },
     {
       "id": "Q02",
@@ -63,7 +63,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.215784
+      "latency_ms": 0.241068
     },
     {
       "id": "Q03",
@@ -91,7 +91,7 @@
           "document_id": "art-guide",
           "version": "v2",
           "location": "第3节 申请条件",
-          "excerpt": "所有材料须加盖申请方公章。"
+          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
         },
         {
           "document_id": "funding-2026-cul",
@@ -102,7 +102,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.256031
+      "latency_ms": 0.264385
     },
     {
       "id": "Q04",
@@ -137,17 +137,11 @@
           "version": "v1",
           "location": "第3节 申请方式",
           "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
-        },
-        {
-          "document_id": "art-guide",
-          "version": "v2",
-          "location": "第6节 审批流程",
-          "excerpt": "街道办事处在收到完整材料后七个工作日内完成初审，初审通过后进入公示期。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.350521
+      "latency_ms": 0.385585
     },
     {
       "id": "Q05",
@@ -170,11 +164,29 @@
           "version": "v1",
           "location": "第2节 场地报备要求",
           "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第4节 申请时间与方式",
+          "excerpt": "申请须于活动开始前二十五个工作日提交至街道办事处文化服务窗口。"
+        },
+        {
+          "document_id": "fire-training",
+          "version": "v1",
+          "location": "第3节 参加人员",
+          "excerpt": "参加人员名单须在培训前三个工作日报社区居委会备案。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第4节 保证金",
+          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.284456
+      "latency_ms": 0.319773
     },
     {
       "id": "Q06",
@@ -201,7 +213,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.448035
+      "latency_ms": 0.458023
     },
     {
       "id": "Q07",
@@ -234,7 +246,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.385681
+      "latency_ms": 0.409207
     },
     {
       "id": "Q08",
@@ -257,11 +269,17 @@
           "version": "v1",
           "location": "第3节 中央广场收费",
           "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.49327
+      "latency_ms": 0.533231
     },
     {
       "id": "Q09",
@@ -288,7 +306,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.555012
+      "latency_ms": 0.561092
     },
     {
       "id": "Q10",
@@ -315,7 +333,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.365062
+      "latency_ms": 0.37859
     },
     {
       "id": "Q11",
@@ -336,7 +354,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.237392
+      "latency_ms": 0.26924
     },
     {
       "id": "Q12",
@@ -349,7 +367,7 @@
       "citations_located": false,
       "refusal": true,
       "pass": true,
-      "latency_ms": 0.237565
+      "latency_ms": 0.227695
     },
     {
       "id": "Q13",
@@ -382,7 +400,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.321151
+      "latency_ms": 0.357425
     },
     {
       "id": "Q14",
@@ -411,17 +429,11 @@
           "version": "v1",
           "location": "第3节 申请方式",
           "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
-        },
-        {
-          "document_id": "art-guide",
-          "version": "v2",
-          "location": "第3节 申请条件",
-          "excerpt": "所有材料须加盖申请方公章。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.33082
+      "latency_ms": 0.276201
     },
     {
       "id": "Q15",
@@ -442,7 +454,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.182428
+      "latency_ms": 0.23979
     },
     {
       "id": "Q16",
@@ -463,7 +475,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.245818
+      "latency_ms": 0.27804
     },
     {
       "id": "Q17",
@@ -484,7 +496,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.352654
+      "latency_ms": 0.376173
     },
     {
       "id": "Q18",
@@ -505,7 +517,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.238196
+      "latency_ms": 0.261254
     },
     {
       "id": "Q19",
@@ -532,7 +544,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.451746
+      "latency_ms": 0.439843
     },
     {
       "id": "Q20",
@@ -545,7 +557,7 @@
       "citations_located": false,
       "refusal": true,
       "pass": true,
-      "latency_ms": 0.253215
+      "latency_ms": 0.323285
     },
     {
       "id": "Q21",
@@ -558,7 +570,28 @@
       "citations_located": false,
       "refusal": true,
       "pass": true,
-      "latency_ms": 0.461648
+      "latency_ms": 0.465451
+    },
+    {
+      "id": "Q22",
+      "query": "社区艺术节当前的初审时限是多少",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第6节 审批流程",
+          "excerpt": "街道办事处在收到完整材料后七个工作日内完成初审，初审通过后进入公示期。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.380584
     }
   ]
 }

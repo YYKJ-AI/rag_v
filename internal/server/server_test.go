@@ -24,8 +24,12 @@ func TestAskUsesScopeKey(t *testing.T) {
 		{ID: "resident-fee@v1#sec-1", DocID: "resident-fee", Version: "v1", SectionPath: "费用标准", Text: "居民申请费用为一百元。"},
 		{ID: "org-fee@v1#sec-1", DocID: "org-fee", Version: "v1", SectionPath: "费用标准", Text: "组织申请费用为二百元。"},
 	}
+	chunks := []*types.Chunk{
+		{ID: "resident-fee@v1#chunk-1", SectionID: sections[0].ID, Text: sections[0].Text},
+		{ID: "org-fee@v1#chunk-1", SectionID: sections[1].ID, Text: sections[1].Text},
+	}
 	r := retriever.New()
-	r.Index(docs, sections, nil)
+	r.Index(docs, sections, chunks)
 	h := server.Handler(server.Deps{Engine: engine.New(r), Ret: r})
 	for _, tt := range []struct {
 		key, wantDoc string

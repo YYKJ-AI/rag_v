@@ -9,14 +9,12 @@ import (
 	"ragbot/internal/types"
 )
 
-// Retriever 三层渐进式检索（目录层→大纲层→正文层的信号在父块聚合与降权中体现）
+// Retriever indexes imported chunks and returns their parent sections for citation.
 type Retriever struct {
 	docs     []*types.Document
-	secOrder []*types.Section
 	secs     map[string]*types.Section
 	inverted map[string]map[int]int // term -> chunkIdx -> tf
 	chunks   []*types.Chunk
-	secOf    []int // chunkIdx -> secOrder index
 	docLen   float64
 }
 
@@ -24,47 +22,36 @@ func New() *Retriever {
 	return &Retriever{secs: map[string]*types.Section{}, inverted: map[string]map[int]int{}}
 }
 
-// Index 建索引（文档级幂等：同 (doc,version) 跳过）
-func (r *Retriever) Index(docs []*types.Document, secs []*types.Section, _ []*types.Chunk) {
-	exist := map[string]bool{}
-	for _, d := range r.docs {
-		exist[d.ID+"@"+d.Version] = true
+// Index replaces the index from a complete store snapshot; repeated calls do not duplicate data.
+func (r *Retriever) Index(docs []*types.Document, secs []*types.Section, chunks []*types.Chunk) {
+	r.docs = append([]*types.Document(nil), docs...)
+	r.secs = make(map[string]*types.Section, len(secs))
+	for _, section := range secs {
+		copy := *section
+		r.secs[copy.ID] = &copy
 	}
-	var newDocs []*types.Document
-	var newSecs []*types.Section
-	for _, d := range docs {
-		if !exist[d.ID+"@"+d.Version] {
-			newDocs = append(newDocs, d)
-		}
-	}
-	for _, s := range secs {
-		if _, ok := r.secs[s.ID]; ok {
+	r.chunks = make([]*types.Chunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		section := r.secs[chunk.SectionID]
+		if section == nil || r.docOf(section) == nil || chunk.Text == "" {
 			continue
 		}
-		cp := *s
-		r.secs[s.ID] = &cp
-		newSecs = append(newSecs, &cp)
+		copy := *chunk
+		r.chunks = append(r.chunks, &copy)
 	}
-	r.docs = append(r.docs, newDocs...)
-	r.secOrder = append(r.secOrder, newSecs...)
 	r.rebuild()
 }
 
 func (r *Retriever) rebuild() {
 	r.inverted = map[string]map[int]int{}
-	r.chunks = nil
-	r.secOf = nil
 	titleOf := map[string]string{}
 	for _, d := range r.docs {
 		titleOf[d.ID+"@"+d.Version] = d.Title
 	}
-	for si, s := range r.secOrder {
-		// 标题+节路径参与索引（承载主题语义；tf 天然加权，使主题相关的节排名靠前）
-		text := titleOf[s.DocID+"@"+s.Version] + " " + s.SectionPath + " " + s.Text
-		ch := types.Chunk{ID: s.ID + "#c0", SectionID: s.ID, Text: s.Text, SimHash: s.SimHash}
-		r.chunks = append(r.chunks, &ch)
-		r.secOf = append(r.secOf, si)
-		ci := len(r.chunks) - 1
+	for ci, chunk := range r.chunks {
+		section := r.secs[chunk.SectionID]
+		// Keep title and section path signals, but index only this real chunk's body.
+		text := titleOf[section.DocID+"@"+section.Version] + " " + section.SectionPath + " " + chunk.Text
 		for _, t := range tokenize.Tokenize(text) {
 			if r.inverted[t] == nil {
 				r.inverted[t] = map[int]int{}
@@ -86,26 +73,40 @@ func (r *Retriever) rebuild() {
 func (r *Retriever) Search(query string, n int) []types.Hit {
 	toks := tokenize.Expand(tokenize.Tokenize(query))
 	scores := r.bm25(toks)
-	best := map[string]float64{} // 父块聚合：同父块留最高分
+	type chunkScore struct {
+		score float64
+		chunk types.Chunk
+	}
+	best := map[string]chunkScore{} // 父块聚合：同父块留最高分
 	for ci, sc := range scores {
+		if sc <= 0 {
+			continue
+		}
 		sid := r.chunks[ci].SectionID
-		if sc > best[sid] {
-			best[sid] = sc
+		previous, exists := best[sid]
+		if !exists || sc > previous.score || (sc == previous.score && r.chunks[ci].ID < previous.chunk.ID) {
+			best[sid] = chunkScore{score: sc, chunk: *r.chunks[ci]}
 		}
 	}
 	var hits []types.Hit
-	for sid, sc := range best {
+	for sid, selected := range best {
 		s := r.secs[sid]
 		doc := r.docOf(s)
 		if doc == nil {
 			continue
 		}
+		sc := selected.score
 		if doc.Status == "needs_review" {
 			sc *= 0.5
 		}
-		hits = append(hits, types.Hit{Section: *s, Score: sc})
+		hits = append(hits, types.Hit{Section: *s, Chunk: selected.chunk, Score: sc})
 	}
-	sort.Slice(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].Score != hits[j].Score {
+			return hits[i].Score > hits[j].Score
+		}
+		return hits[i].Section.ID < hits[j].Section.ID
+	})
 	if n > 0 && len(hits) > n {
 		hits = hits[:n]
 	}

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T11:14:37+08:00",
+  "generated_at": "2026-11-11T11:22:10+08:00",
   "total": 14,
   "passed": 14,
   "hit5_passed": 13,
@@ -15,7 +15,7 @@
   "refusal_total": 1,
   "refusal_rate": 1,
   "refusal_ok": true,
-  "avg_latency_ms": 0.23688542857142858,
+  "avg_latency_ms": 0.2393832857142857,
   "records": [
     {
       "id": "Q01",
@@ -48,7 +48,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.318775
+      "latency_ms": 0.310032
     },
     {
       "id": "Q02",
@@ -75,7 +75,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.189657
+      "latency_ms": 0.195659
     },
     {
       "id": "Q03",
@@ -108,7 +108,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.227925
+      "latency_ms": 0.204781
     },
     {
       "id": "Q04",
@@ -147,7 +147,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.143307
+      "latency_ms": 0.236829
     },
     {
       "id": "Q05",
@@ -192,7 +192,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.303592
+      "latency_ms": 0.208023
     },
     {
       "id": "Q06",
@@ -219,7 +219,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.255921
+      "latency_ms": 0.248084
     },
     {
       "id": "Q07",
@@ -252,7 +252,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.246557
+      "latency_ms": 0.258106
     },
     {
       "id": "Q08",
@@ -291,7 +291,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.285295
+      "latency_ms": 0.244089
     },
     {
       "id": "Q09",
@@ -324,7 +324,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.27465
+      "latency_ms": 0.36287
     },
     {
       "id": "Q10",
@@ -351,7 +351,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.249581
+      "latency_ms": 0.24131
     },
     {
       "id": "Q11",
@@ -384,7 +384,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.180051
+      "latency_ms": 0.172614
     },
     {
       "id": "Q12",
@@ -397,7 +397,7 @@
       "citations_located": false,
       "refusal": true,
       "pass": true,
-      "latency_ms": 0.187753
+      "latency_ms": 0.214835
     },
     {
       "id": "Q13",
@@ -424,7 +424,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.242598
+      "latency_ms": 0.21935
     },
     {
       "id": "Q14",
@@ -463,7 +463,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.210734
+      "latency_ms": 0.234784
     }
   ]
 }

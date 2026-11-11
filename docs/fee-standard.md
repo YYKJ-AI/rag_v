@@ -5,6 +5,7 @@ title: 社区活动场地收费标准说明
 publish_date: 2025-06-01
 effective_date: 2025-06-15
 scope: 各社区公共活动场地
+scope_keys: venue_applicant
 nature: 基础规范
 ---
 

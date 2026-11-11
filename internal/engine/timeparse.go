@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	reFullDate   = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
-	reYearMonth  = regexp.MustCompile(`(20\d{2})年(\d{1,2})月`)
-	reYear       = regexp.MustCompile(`(20\d{2})年`)
-	reISODate    = regexp.MustCompile(`\b(20\d{2})-(\d{1,2})-(\d{1,2})\b`)
-	reLastYear   = regexp.MustCompile(`去年|上一年度`)
+	reFullDate  = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
+	reYearMonth = regexp.MustCompile(`(20\d{2})年(\d{1,2})月`)
+	reYear      = regexp.MustCompile(`(20\d{2})年`)
+	reISODate   = regexp.MustCompile(`\b(20\d{2})-(\d{1,2})-(\d{1,2})\b`)
+	reLastYear  = regexp.MustCompile(`去年|上一年度`)
 )
 
 // inferQueryTime 从问句推断时间点；无时间表达 → nil（走现行口径）。
@@ -55,5 +55,8 @@ func parseYMD(ys, ms, ds string) *time.Time {
 		return nil
 	}
 	t := time.Date(y, time.Month(mo), d, 0, 0, 0, 0, time.UTC)
+	if t.Year() != y || int(t.Month()) != mo || t.Day() != d {
+		return nil
+	}
 	return &t
 }

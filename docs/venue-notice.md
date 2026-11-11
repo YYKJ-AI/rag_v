@@ -5,6 +5,7 @@ title: 中央广场场地使用补充通知
 publish_date: 2026-02-20
 effective_date: 2026-03-01
 scope: 使用中央广场举办活动的申请方
+scope_keys: venue_applicant
 nature: 补充说明
 ---
 

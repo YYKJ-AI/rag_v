@@ -6,31 +6,33 @@ import "time"
 
 // Document 文档级打标（对应 front-matter）
 type Document struct {
-	ID            string    `json:"id"`                       // 稳定 document_id
-	Version       string    `json:"version"`                  // v1/v2/...
+	ID            string    `json:"id"`      // 稳定 document_id
+	Version       string    `json:"version"` // v1/v2/...
 	Title         string    `json:"title"`
 	PublishDate   time.Time `json:"publish_date"`
-	EffectiveDate time.Time `json:"effective_date"`           // 业务生效时间
-	Scope         string    `json:"scope"`                    // 适用范围
-	Nature        string    `json:"nature"`                   // 基础规范/修订通知/补充说明
-	Replaces      []string  `json:"replaces"`                 // 明确替代关系 ["art-guide@v1"]
-	SupersededBy  string    `json:"superseded_by,omitempty"`  // 反向指针，空=现行
-	Fingerprint   uint64    `json:"fingerprint"`              // 文档级 SimHash
-	ActivatedAt   time.Time `json:"activated_at"`             // 系统时间轴 valid_from
-	SupersededAt  time.Time `json:"superseded_at,omitempty"`  // 系统时间轴 valid_until
-	Status        string    `json:"status"`                   // active|superseded|needs_review
+	EffectiveDate time.Time `json:"effective_date"`          // 业务生效时间
+	ValidUntil    time.Time `json:"valid_until,omitempty"`   // 业务有效期末日（含当天）
+	Scope         string    `json:"scope"`                   // 适用范围
+	ScopeKeys     []string  `json:"scope_keys,omitempty"`    // 机器可读适用范围键；* 表示通用
+	Nature        string    `json:"nature"`                  // 基础规范/修订通知/补充说明
+	Replaces      []string  `json:"replaces"`                // 明确替代关系 ["art-guide@v1"]
+	SupersededBy  string    `json:"superseded_by,omitempty"` // 导入时声明的反向替代关系；非当前业务状态
+	Fingerprint   uint64    `json:"fingerprint"`             // 文档级 SimHash
+	ActivatedAt   time.Time `json:"activated_at"`            // 系统时间轴 valid_from
+	SupersededAt  time.Time `json:"superseded_at,omitempty"` // 系统时间轴 valid_until
+	Status        string    `json:"status"`                  // 导入关系状态；问答按业务日期另行裁决
 }
 
 // Section 父块：引用定位的最小单位
 type Section struct {
-	ID          string   `json:"id"`           // docId@version#sec-2
-	DocID       string   `json:"doc_id"`
-	Version     string   `json:"version"`
-	SectionPath string   `json:"section_path"` // "第2节 申请条件"（citation 定位符）
-	ParaIndex   int      `json:"para_index"`
-	Text        string   `json:"text"`         // 父块全文
-	Summary     string   `json:"summary"`      // 大纲层检索用（节标题+首句）
-	SimHash     uint64   `json:"simhash"`
+	ID          string `json:"id"` // docId@version#sec-2
+	DocID       string `json:"doc_id"`
+	Version     string `json:"version"`
+	SectionPath string `json:"section_path"` // "第2节 申请条件"（citation 定位符）
+	ParaIndex   int    `json:"para_index"`
+	Text        string `json:"text"`    // 父块全文
+	Summary     string `json:"summary"` // 大纲层检索用（节标题+首句）
+	SimHash     uint64 `json:"simhash"`
 }
 
 // Chunk 子块：检索的最小单位
@@ -39,11 +41,11 @@ type Chunk struct {
 	SectionID string   `json:"section_id"`
 	Text      string   `json:"text"`
 	Tokens    []string `json:"tokens"`
-	Hash      string   `json:"hash"`     // sha256，精确复用判据
-	SimHash   uint64   `json:"simhash"`  // 近重复去重
+	Hash      string   `json:"hash"`    // sha256，精确复用判据
+	SimHash   uint64   `json:"simhash"` // 近重复去重
 	// embedding 相关字段预留（向量路径未启用时为空）
-	EmbeddingModel   string    `json:"embedding_model,omitempty"`
-	EmbeddingVersion string    `json:"embedding_version,omitempty"`
+	EmbeddingModel   string `json:"embedding_model,omitempty"`
+	EmbeddingVersion string `json:"embedding_version,omitempty"`
 }
 
 // Hit 检索命中
@@ -57,13 +59,13 @@ type Hit struct {
 type Citation struct {
 	DocumentID string `json:"document_id"`
 	Version    string `json:"version"`
-	Location   string `json:"location"`   // "第2节/第3段"
-	Excerpt    string `json:"excerpt"`    // 逐字来自父块，防拼接失真
+	Location   string `json:"location"` // "第2节/第3段"
+	Excerpt    string `json:"excerpt"`  // 逐字来自父块，防拼接失真
 }
 
 // Answer 统一返回结构（任务书规定的形态）
 type Answer struct {
-	Status    string     `json:"status"`    // answered|conflict|insufficient_evidence
+	Status    string     `json:"status"` // answered|conflict|insufficient_evidence
 	Answer    string     `json:"answer"`
 	Citations []Citation `json:"citations"`
 }

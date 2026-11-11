@@ -29,8 +29,9 @@ func Handler(d Deps) http.Handler {
 
 	mux.HandleFunc("POST /api/ask", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Query string `json:"query"`
-			AsOf  string `json:"as_of"` // 可选 "2006-01-02"
+			Query    string `json:"query"`
+			AsOf     string `json:"as_of"` // 可选 "2006-01-02"
+			ScopeKey string `json:"scope_key"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			httpError(w, http.StatusBadRequest, "请求体不是合法 JSON")
@@ -51,7 +52,7 @@ func Handler(d Deps) http.Handler {
 			asOf = &t
 		}
 		start := time.Now()
-		ans := d.Engine.Answer(req.Query, asOf)
+		ans := d.Engine.AnswerWithScope(req.Query, asOf, req.ScopeKey)
 		resp := map[string]any{
 			"status":       ans.Status,
 			"answer":       ans.Answer,
@@ -79,11 +80,11 @@ func Handler(d Deps) http.Handler {
 		}
 		hits := d.Ret.Search(q, n)
 		type hitOut struct {
-			DocID    string  `json:"doc_id"`
-			Version  string  `json:"version"`
-			Path     string  `json:"section_path"`
-			Score    float64 `json:"score"`
-			Excerpt  string  `json:"excerpt"`
+			DocID   string  `json:"doc_id"`
+			Version string  `json:"version"`
+			Path    string  `json:"section_path"`
+			Score   float64 `json:"score"`
+			Excerpt string  `json:"excerpt"`
 		}
 		out := make([]hitOut, 0, len(hits))
 		for _, h := range hits {

@@ -4,7 +4,9 @@ version: v1
 title: 社区艺术节常见问题解答汇编（2025年度）
 publish_date: 2025-05-20
 effective_date: 2025-05-20
+valid_until: 2025-12-31
 scope: 全体社区居民
+scope_keys: resident
 nature: 历史问答
 ---
 

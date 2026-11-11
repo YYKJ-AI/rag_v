@@ -19,18 +19,20 @@ type DocMeta struct {
 	Title         string   `json:"title"`
 	PublishDate   string   `json:"publish_date"`
 	EffectiveDate string   `json:"effective_date"`
+	ValidUntil    string   `json:"valid_until"`
 	Scope         string   `json:"scope"`
+	ScopeKeys     []string `json:"scope_keys"`
 	Nature        string   `json:"nature"`
 	Replaces      []string `json:"replaces"`
 }
 
 // Result 单次导入结果
 type Result struct {
-	Action   string           `json:"action"` // created | duplicate | superseded | error
-	Doc      *types.Document  `json:"doc,omitempty"`
-	Sections int              `json:"sections"`
-	Chunks   int              `json:"chunks"`
-	Reason   string           `json:"reason,omitempty"`
+	Action   string          `json:"action"` // created | duplicate | superseded | error
+	Doc      *types.Document `json:"doc,omitempty"`
+	Sections int             `json:"sections"`
+	Chunks   int             `json:"chunks"`
+	Reason   string          `json:"reason,omitempty"`
 }
 
 // Parse 解析 Markdown 文档：front-matter + 标题层级 + 段落
@@ -70,8 +72,16 @@ func Parse(raw []byte) (*DocMeta, []SectionDraft, error) {
 			meta.PublishDate = v
 		case "effective_date":
 			meta.EffectiveDate = v
+		case "valid_until":
+			meta.ValidUntil = v
 		case "scope":
 			meta.Scope = v
+		case "scope_keys":
+			for _, key := range strings.Split(v, ",") {
+				if key = strings.TrimSpace(key); key != "" {
+					meta.ScopeKeys = append(meta.ScopeKeys, key)
+				}
+			}
 		case "nature":
 			meta.Nature = v
 		case "replaces":
@@ -107,7 +117,7 @@ func Parse(raw []byte) (*DocMeta, []SectionDraft, error) {
 				sections = append(sections, *cur)
 			}
 			cur = &SectionDraft{
-				Path:     strings.TrimSpace(strings.TrimPrefix(line, "## ")),
+				Path:      strings.TrimSpace(strings.TrimPrefix(line, "## ")),
 				ParaIndex: paraStart,
 			}
 			paraStart++
@@ -144,25 +154,35 @@ type SectionDraft struct {
 // Build 把解析结果组装成 Document/Section/Chunk（含双指纹、块级去重）
 func Build(meta *DocMeta, drafts []SectionDraft) (*types.Document, []*types.Section, []*types.Chunk, error) {
 	doc := &types.Document{
-		ID:     meta.ID,
-		Version: meta.Version,
-		Title:  meta.Title,
-		Scope:  meta.Scope,
-		Nature: meta.Nature,
-		Replaces: meta.Replaces,
-		Status: "active",
+		ID:          meta.ID,
+		Version:     meta.Version,
+		Title:       meta.Title,
+		Scope:       meta.Scope,
+		ScopeKeys:   meta.ScopeKeys,
+		Nature:      meta.Nature,
+		Replaces:    meta.Replaces,
+		Status:      "active",
 		ActivatedAt: time.Now(),
 	}
 	var err error
 	if meta.PublishDate != "" {
-		doc.PublishDate, err = time.Parse("2006-01-02", meta.PublishDate)
+		doc.PublishDate, err = parseDate(meta.PublishDate)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("publish_date 格式应为 2006-01-02: %w", err)
 		}
 	}
-	doc.EffectiveDate, err = time.Parse("2006-01-02", meta.EffectiveDate)
+	doc.EffectiveDate, err = parseDate(meta.EffectiveDate)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("effective_date 格式应为 2006-01-02: %w", err)
+	}
+	if meta.ValidUntil != "" {
+		doc.ValidUntil, err = parseDate(meta.ValidUntil)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("valid_until 格式应为 2006-01-02: %w", err)
+		}
+		if doc.ValidUntil.Before(doc.EffectiveDate) {
+			return nil, nil, nil, fmt.Errorf("valid_until 不得早于 effective_date")
+		}
 	}
 
 	// 文档级指纹：标题+全部正文拼接
@@ -218,6 +238,17 @@ func Build(meta *DocMeta, drafts []SectionDraft) (*types.Document, []*types.Sect
 		}
 	}
 	return doc, sections, chunks, nil
+}
+
+func parseDate(value string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if t.Format("2006-01-02") != value {
+		return time.Time{}, fmt.Errorf("日期必须为 YYYY-MM-DD 且有效")
+	}
+	return t, nil
 }
 
 // chunkParas 段聚合滑窗切块：目标 target 字，重叠 overlap 字

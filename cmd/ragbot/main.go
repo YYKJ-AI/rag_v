@@ -26,6 +26,7 @@ func main() {
 	queries := flag.String("queries", "eval/queries.json", "评测查询集")
 	baseline := flag.String("baseline", "eval/baseline/latest.json", "评测结果输出")
 	asOfStr := flag.String("as-of", "", "时间点查询（2006-01-02）")
+	scopeKey := flag.String("scope-key", "", "适用范围键（文档 scope_keys 中的值）")
 	addrFlag := flag.String("addr", ":8080", "serve 模式监听地址")
 	webDir := flag.String("web", "web", "静态页目录")
 	flag.Parse()
@@ -62,7 +63,7 @@ func main() {
 			asOf = &t
 		}
 		e := newEngine(ret)
-		ans := e.Answer(q, asOf)
+		ans := e.AnswerWithScope(q, asOf, *scopeKey)
 		b, _ := json.MarshalIndent(ans, "", "  ")
 		fmt.Println(string(b))
 	case "serve":
@@ -96,13 +97,14 @@ func main() {
 
 用法：
   ragbot ingest [目录]            导入 Markdown 文档（默认 docs/）
-  ragbot ask "问题" [-as-of 日期]  提问，返回带出处的回答
+  ragbot -as-of 日期 -scope-key 键 ask "问题"  按时间和适用范围提问（参数可省略）
   ragbot evaluate                 运行评测集，输出指标与逐条结果
 
 参数：
   -data 目录    数据落盘位置（默认 data/）
   -docs 目录    文档目录（默认 docs/）
-  -queries 文件 评测查询集（默认 eval/queries.json）`)
+  -queries 文件 评测查询集（默认 eval/queries.json）
+  -scope-key 键  仅使用标注该适用范围键或 * 的文档`)
 	}
 }
 

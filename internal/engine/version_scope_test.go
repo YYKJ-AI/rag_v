@@ -59,6 +59,11 @@ func TestVersionSelectionByBusinessDate(t *testing.T) {
 	}
 	afterFuture := time.Now().AddDate(3, 0, 0)
 	assertOnlyVersion(t, e.Answer(query, &afterFuture), "v3")
+	for _, hit := range e.Top(query, 5) {
+		if hit.Section.Version != "v2" {
+			t.Errorf("Top(%q, 5) includes %s, want only currently eligible v2", query, hit.Section.Version)
+		}
+	}
 }
 
 func TestCrossDocumentReplacement(t *testing.T) {

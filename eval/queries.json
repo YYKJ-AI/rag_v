@@ -12,5 +12,12 @@
   {"id":"Q11","query":"消防培训多久组织一次","expect_docs":["fire-training"],"expect_sources":[{"document_id":"fire-training","version":"v1"}],"expect_status":"answered","note":"领域外文档精确命中"},
   {"id":"Q12","query":"艺术节可以带宠物入场吗","expect_docs":[],"expect_status":"insufficient_evidence","note":"拒答：资料未覆盖"},
   {"id":"Q13","query":"场地保证金什么时候退还","expect_docs":["venue-notice"],"expect_sources":[{"document_id":"venue-notice","version":"v1"}],"expect_status":"answered","note":"退费规则定位"},
-  {"id":"Q14","query":"补交材料的方式有哪些","expect_docs":["art-guide"],"expect_sources":[{"document_id":"art-guide","version":"v2"}],"expect_status":"answered","note":"同义+方式渠道"}
+  {"id":"Q14","query":"补交材料的方式有哪些","expect_docs":["art-guide"],"expect_sources":[{"document_id":"art-guide","version":"v2"}],"expect_status":"answered","note":"同义+方式渠道"},
+  {"id":"Q15","query":"星河工作坊在哪里举办","expect_docs":["workshop-plan"],"expect_sources":[{"document_id":"workshop-plan","version":"v1"}],"expect_status":"answered","note":"项目方案直接事实"},
+  {"id":"Q16","query":"星河工作坊的活动主题是什么","expect_docs":["workshop-intro"],"expect_sources":[{"document_id":"workshop-intro","version":"v1"}],"expect_status":"answered","note":"项目介绍直接事实"},
+  {"id":"Q17","query":"报名星河工作坊第二步需要上传什么","expect_docs":["workshop-process"],"expect_sources":[{"document_id":"workshop-process","version":"v1"}],"expect_status":"answered","note":"流程单步证据"},
+  {"id":"Q18","query":"星光画笔的单价是多少元","expect_docs":["workshop-budget"],"expect_sources":[{"document_id":"workshop-budget","version":"v1"}],"expect_status":"answered","note":"表格单行证据"},
+  {"id":"Q19","query":"报名星河工作坊要上传什么，入场券在哪里领取","expect_docs":["workshop-process","workshop-plan"],"expect_sources":[{"document_id":"workshop-process","version":"v1"},{"document_id":"workshop-plan","version":"v1"}],"expect_status":"answered","note":"流程与方案的双来源合并"},
+  {"id":"Q20","query":"星图纸和星光画笔合计多少钱","expect_docs":[],"expect_status":"insufficient_evidence","note":"表格没有直接合计金额，离线规则不计算"},
+  {"id":"Q21","query":"能否推断星河工作坊的孩子会提高多少创造力","expect_docs":[],"expect_status":"insufficient_evidence","note":"项目介绍不支持效果推断"}
 ]

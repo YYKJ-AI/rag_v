@@ -64,12 +64,33 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 			Answer: "资料中未找到覆盖该问题的充分依据，无法给出有出处的回答。",
 		}
 	}
+	if clauses := splitQueryClauses(query); len(clauses) > 1 {
+		var combined []evidence
+		for _, clause := range clauses {
+			focus := stripTitleTopic(clause, e.R.Docs())
+			candidates := e.extract(focus, hits)
+			if len(candidates) == 0 || needsUnsupportedReasoning(clause, candidates) || (isModalQuestion(clause) && !hasModalVerdict(candidates)) {
+				return types.Answer{Status: "insufficient_evidence", Answer: "至少一个子问题缺少可直接核验的证据，无法合并回答。"}
+			}
+			if groups := e.groupByClaim(clause, candidates); len(groups) > 1 {
+				return e.buildConflict(groups)
+			}
+			combined = append(combined, candidates[0])
+		}
+		return e.build(combined)
+	}
 
 	evids := e.extract(query, hits)
 	if len(evids) == 0 {
 		return types.Answer{
 			Status: "insufficient_evidence",
 			Answer: "检索到相关资料，但其中没有与问题直接对应的结论性内容，无法给出有出处的回答。",
+		}
+	}
+	if needsUnsupportedReasoning(query, evids) {
+		return types.Answer{
+			Status: "insufficient_evidence",
+			Answer: "资料中没有直接给出所问的计算或推断结论，当前离线规则不能据此生成可核验的答案。",
 		}
 	}
 
@@ -90,6 +111,56 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 	return e.build(evids)
 }
 
+// sharedTitleTopic finds a topic repeated across several document titles.
+func sharedTitleTopic(clause string, docs []*types.Document) string {
+	best := ""
+	q := []rune(clause)
+	for _, doc := range docs {
+		title := doc.Title
+		for start := range q {
+			for end := start + 3; end <= len(q); end++ {
+				candidate := string(q[start:end])
+				if len([]rune(best)) >= end-start || !strings.Contains(title, candidate) {
+					continue
+				}
+				count := 0
+				for _, other := range docs {
+					if strings.Contains(other.Title, candidate) {
+						count++
+					}
+				}
+				if count >= 3 {
+					best = candidate
+				}
+			}
+		}
+	}
+	return best
+}
+
+// stripTitleTopic removes that topic so answer terms drive sentence ranking.
+func stripTitleTopic(clause string, docs []*types.Document) string {
+	best := sharedTitleTopic(clause, docs)
+	if best == "" {
+		return clause
+	}
+	trimmed := strings.TrimSpace(strings.ReplaceAll(clause, best, ""))
+	if trimmed == "" {
+		return clause
+	}
+	return trimmed
+}
+
+func splitQueryClauses(query string) []string {
+	var clauses []string
+	for _, clause := range strings.FieldsFunc(query, func(r rune) bool { return r == '，' || r == '；' || r == ';' }) {
+		if clause = strings.TrimSpace(clause); clause != "" {
+			clauses = append(clauses, clause)
+		}
+	}
+	return clauses
+}
+
 // extract 证据句抽取：命中父块内句子与 query 的对齐分过滤
 type evidence struct {
 	Sentence string
@@ -99,10 +170,19 @@ type evidence struct {
 }
 
 func (e *Engine) extract(query string, hits []types.Hit) []evidence {
-	q := tokenize.Expand(tokenize.Tokenize(query))
+	focusQuery := stripTitleTopic(query, e.R.Docs())
+	topic := sharedTitleTopic(query, e.R.Docs())
+	q := tokenize.Expand(tokenize.Tokenize(focusQuery))
 	var out []evidence
 	for _, h := range hits {
+		title := docTitle(e, h.Section)
 		for _, sent := range splitSentences(h.Section.Text) {
+			if topic != "" && !strings.Contains(title, topic) && !strings.Contains(sent, topic) {
+				continue
+			}
+			if strings.HasPrefix(sent, "|") && !sharesSpecificToken(q, tokenize.Tokenize(sent)) {
+				continue // 表格行至少要命中问句中的具体单元格词
+			}
 			// 问答汇编：问：…答：… 同句。取"答："之后的答案部分做证据；纯问句跳过。
 			if strings.HasPrefix(sent, "问：") {
 				if i := strings.Index(sent, "答："); i >= 0 {
@@ -112,14 +192,18 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 				}
 			}
 			// 对齐上下文 = 文档标题 + 节路径 + 句子（标题/路径承载语义，如"申请条件"）
-			ctx := docTitle(e, h.Section) + " " + h.Section.SectionPath + " " + sent
+			ctx := title + " " + h.Section.SectionPath + " " + sent
 			st := tokenize.Tokenize(ctx)
 			score := alignScore(q, st)
+			if isEligibilityQuery(focusQuery) && strings.Contains(sent, "申请人") {
+				score += 0.40
+			}
 			if score >= 0.34 { // 句子级对齐阈值（dev 集调参）
-				out = append(out, evidence{Sentence: sent, Sec: h.Section, Title: docTitle(e, h.Section), Score: score})
+				out = append(out, evidence{Sentence: sent, Sec: h.Section, Title: title, Score: score})
 			}
 		}
 	}
+	boostSpecificTerms(focusQuery, out)
 	// 相对截断：只保留接近最强证据的句子（绝对阈值兜底），压掉长尾噪音引用
 	if len(out) > 0 {
 		best := 0.0
@@ -151,6 +235,60 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 		out = out[:6]
 	}
 	return out
+}
+
+func isEligibilityQuery(query string) bool {
+	for _, marker := range []string{"资格", "条件", "谁可以", "什么人"} {
+		if strings.Contains(query, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// boostSpecificTerms rewards query terms that occur in few candidate sentences.
+// It uses the actual evidence text, so a common document title cannot alone
+// make an unrelated sentence outrank a specific answer.
+func boostSpecificTerms(query string, evids []evidence) {
+	terms := map[string]bool{}
+	for _, term := range tokenize.Expand(tokenize.Tokenize(query)) {
+		terms[term] = true
+	}
+	frequency := map[string]int{}
+	for term := range terms {
+		for _, ev := range evids {
+			if strings.Contains(ev.Sentence, term) {
+				frequency[term]++
+			}
+		}
+	}
+	for i := range evids {
+		for term, count := range frequency {
+			if count == 0 || !strings.Contains(evids[i].Sentence, term) {
+				continue
+			}
+			weight := 0.08
+			if len([]rune(term)) > 1 {
+				weight = 0.30
+			}
+			evids[i].Score += weight / float64(count)
+		}
+	}
+}
+
+func sharesSpecificToken(query, sentence []string) bool {
+	terms := make(map[string]bool, len(query))
+	for _, term := range query {
+		if len([]rune(term)) >= 2 {
+			terms[term] = true
+		}
+	}
+	for _, term := range sentence {
+		if terms[term] {
+			return true
+		}
+	}
+	return false
 }
 
 // alignScore 对齐分：查询单字对句子的包含度（inter/|q_unigrams|）+ 条件词加权。
@@ -518,22 +656,74 @@ func hasModalVerdict(evids []evidence) bool {
 	return false
 }
 
-// splitSentences 中英句号/分号切句
-func splitSentences(text string) []string {
-	var out []string
-	var cur strings.Builder
-	for _, r := range text {
-		cur.WriteRune(r)
-		if r == '。' || r == '；' || r == '.' || r == ';' || r == '！' || r == '？' {
-			s := strings.TrimSpace(cur.String())
-			if s != "" {
-				out = append(out, s)
-			}
-			cur.Reset()
+// needsUnsupportedReasoning rejects operations without a directly stated result.
+// These are operator classes, not mappings from individual questions to answers.
+func needsUnsupportedReasoning(query string, evids []evidence) bool {
+	for _, marker := range []string{"推断", "推测", "预测", "估计"} {
+		if strings.Contains(query, marker) {
+			return true
 		}
 	}
-	if s := strings.TrimSpace(cur.String()); s != "" {
-		out = append(out, s)
+	calculation := false
+	for _, marker := range []string{"合计", "总共", "总额", "加起来", "差额", "平均"} {
+		if strings.Contains(query, marker) {
+			calculation = true
+			break
+		}
+	}
+	if !calculation {
+		return false
+	}
+	for _, ev := range evids {
+		for _, marker := range []string{"合计", "总计", "总额", "差额", "平均"} {
+			if strings.Contains(ev.Sentence, marker) && hasNumericClaim(ev.Sentence) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// splitSentences separates punctuation, steps, and Markdown table rows.
+func splitSentences(text string) []string {
+	var out []string
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if isTableRule(line) || (strings.HasPrefix(strings.TrimSpace(line), "|") && i+1 < len(lines) && isTableRule(lines[i+1])) {
+			continue // 表头和分隔行只解释列名，不是事实证据
+		}
+		var cur strings.Builder
+		for _, r := range line {
+			cur.WriteRune(r)
+			if r == '。' || r == '；' || r == '.' || r == ';' || r == '！' || r == '？' {
+				s := strings.TrimSpace(cur.String())
+				if s != "" {
+					out = append(out, s)
+				}
+				cur.Reset()
+			}
+		}
+		if s := strings.TrimSpace(cur.String()); s != "" {
+			out = append(out, s)
+		}
 	}
 	return out
+}
+
+func isTableRule(line string) bool {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "|") {
+		return false
+	}
+	hasDash := false
+	for _, r := range line {
+		switch r {
+		case '|', ' ', '\t', ':':
+		case '-':
+			hasDash = true
+		default:
+			return false
+		}
+	}
+	return hasDash
 }

@@ -5,6 +5,7 @@ title: 社区消防安全培训活动组织方案
 publish_date: 2025-09-01
 effective_date: 2025-09-15
 scope: 各居民楼栋长及物业单位
+scope_keys: building_leader,property_unit
 nature: 基础规范
 ---
 

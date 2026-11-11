@@ -5,6 +5,7 @@ title: 艺术节专项经费补助办法（财政所拟稿）
 publish_date: 2026-03-08
 effective_date: 2026-04-01
 scope: 参与艺术节的社会组织
+scope_keys: organization
 nature: 基础规范
 ---
 

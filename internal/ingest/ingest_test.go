@@ -61,6 +61,23 @@ func TestParseRejectsMissingFields(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsInvalidValidityWindow(t *testing.T) {
+	for _, tt := range []struct {
+		name, until string
+	}{
+		{"bad date", "2025-02-30"},
+		{"before effective", "2025-03-14"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := strings.Replace(sampleDoc, "effective_date: 2025-03-15", "effective_date: 2025-03-15\nvalid_until: "+tt.until, 1)
+			meta, drafts := parseOK(t, raw)
+			if _, _, _, err := ingest.Build(meta, drafts); err == nil {
+				t.Errorf("Build(valid_until=%s) error = nil, want error", tt.until)
+			}
+		})
+	}
+}
+
 func TestBuildSimHashAndChunks(t *testing.T) {
 	meta, drafts := parseOK(t, sampleDoc)
 	doc, secs, chunks, err := ingest.Build(meta, drafts)

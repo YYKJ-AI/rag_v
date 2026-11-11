@@ -1,4 +1,4 @@
-// Package retriever 检索层：内存 BM25 倒排 + 父块聚合 + 版本降权。
+// Package retriever 检索层：内存 BM25 倒排 + 父块聚合。
 // 全确定性：同输入同输出，评测可复现；阈值只作用于检索分数，不碰模型输出。
 package retriever
 
@@ -82,7 +82,7 @@ func (r *Retriever) rebuild() {
 	r.docLen = float64(total) / float64(len(r.chunks))
 }
 
-// Search 检索：同义词展开 → BM25 → 父块聚合 → 版本降权 → topN
+// Search 检索：同义词展开 → BM25 → 父块聚合 → topN；版本裁决留给查询层。
 func (r *Retriever) Search(query string, n int) []types.Hit {
 	toks := tokenize.Expand(tokenize.Tokenize(query))
 	scores := r.bm25(toks)
@@ -100,10 +100,7 @@ func (r *Retriever) Search(query string, n int) []types.Hit {
 		if doc == nil {
 			continue
 		}
-		switch doc.Status { // 归档不删：历史版本降权而非删除
-		case "superseded":
-			sc *= 0.4
-		case "needs_review":
+		if doc.Status == "needs_review" {
 			sc *= 0.5
 		}
 		hits = append(hits, types.Hit{Section: *s, Score: sc})

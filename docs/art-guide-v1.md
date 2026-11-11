@@ -5,6 +5,7 @@ title: 社区艺术节活动申请指南（2025版）
 publish_date: 2025-03-01
 effective_date: 2025-03-15
 scope: 全体社区居民及注册社会组织
+scope_keys: resident,organization
 nature: 基础规范
 ---
 

@@ -30,21 +30,34 @@ func New(r retrieverIface) *Engine { return &Engine{R: r} }
 
 // 拒答判据（全确定性；阈值作用在检索分数与对齐分上，不碰模型输出）
 const (
-	absFloor   = 0.15  // 绝对下限（故意很松，防误杀）
-	alignFloor = 0.0   // 无任何句子对齐即视为没答案
+	absFloor   = 0.15 // 绝对下限（故意很松，防误杀）
+	alignFloor = 0.0  // 无任何句子对齐即视为没答案
 )
 
 // Answer 回答入口。asOf 参数为显式覆盖；nil 时自动从问句文本推断时间点
 // （"2025年…"→历史口径，无时间表达→现行口径）。多版本演变自动呈现时间线。
 func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
+	return e.AnswerWithScope(query, asOf, "")
+}
+
+// AnswerWithScope answers using only documents whose scope_keys include scopeKey or *.
+// An empty scopeKey keeps the existing unscoped behavior.
+func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string) types.Answer {
 	inferred := false
 	if asOf == nil {
 		asOf = inferQueryTime(query)
 		inferred = asOf != nil
 	}
 	e.lastInferredTime = inferred
-	hits := e.R.Search(query, 8)
-	hits = e.filterByAsOf(hits, asOf)
+	if asOf == nil {
+		localNow := time.Now()
+		today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)
+		asOf = &today
+	}
+	hits := e.filterByAsOf(e.R.Search(query, 0), asOf, scopeKey)
+	if len(hits) > 8 {
+		hits = hits[:8]
+	}
 	if e.weak(query, hits) {
 		return types.Answer{
 			Status: "insufficient_evidence",
@@ -71,11 +84,7 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 
 	// 冲突三段式：同题多来源且值不同（只在各组的"最强证据句"之间判定，防弱相关污染）
 	if groups := e.groupByClaim(query, evids); len(groups) > 1 {
-		// 规则裁决：现行优先 → 替代关系
-		resolved := e.resolveByRules(groups, asOf)
-		if resolved != nil {
-			return e.build(resolved)
-		}
+		// 生效日和明确替代关系已在证据筛选时裁决；剩余互斥证据交人工核实。
 		return e.buildConflict(groups)
 	}
 	return e.build(evids)
@@ -205,7 +214,7 @@ func (e *Engine) groupByClaim(query string, evids []evidence) map[string][]evide
 	best := map[string]evidence{}
 	bestScore := map[string]float64{}
 	for _, ev := range evids {
-		key := ev.Sec.DocID
+		key := ev.Sec.DocID + "@" + ev.Sec.Version
 		if !e.titleSpecific(query, ev.Title) {
 			continue // 主题不相关：命中的只是全库通用标题字
 		}
@@ -316,70 +325,22 @@ func hasNumericClaim(s string) bool {
 	return false
 }
 
-// resolveByRules 规则裁决（绝不交给模型）：
-// ① 现行版本优先于已废弃版本
-// ② 明确替代关系：A.Replaces 包含 B → 用 A
-// ③ 否则返回 nil → 外层转 conflict
-func (e *Engine) resolveByRules(groups map[string][]evidence, asOf *time.Time) []evidence {
-	docs := e.R.Docs()
-	byKey := map[string]*types.Document{}
-	for _, d := range docs {
-		byKey[d.ID+"@"+d.Version] = d
-	}
-	// 若指定了 as_of，窗口外的直接排除
-	for k, evs := range groups {
-		_ = evs
-		if asOf != nil {
-			d := byKey[k]
-			if d == nil || !e.businessActive(d, *asOf) {
-				delete(groups, k)
-				continue
-			}
-		}
-		if d := byKey[k]; d != nil && d.Status == "superseded" {
-			// 被废弃方若存在现行替代方 → 剔除
-			if d.SupersededBy != "" {
-				if _, ok := groups[d.SupersededBy]; ok {
-					delete(groups, k)
-				}
-			}
-		}
-	}
-	if len(groups) <= 1 {
-		for _, evs := range groups {
-			return evs
-		}
-		return nil
-	}
-	// 明确替代关系裁决
-	keys := sortedKeys(groups)
-	for i := 0; i < len(keys); i++ {
-		for j := 0; j < len(keys); j++ {
-			if i == j {
-				continue
-			}
-			if d := byKey[keys[i]]; d != nil && containsID(d.Replaces, keys[j]) {
-				return groups[keys[i]]
-			}
-		}
-	}
-	return nil
-}
-
 // businessActive 业务时间轴判定（as_of 历史查询）：
 // 该文档在 asOf 时点是否有效 = 生效日期已到 且 未被已在 asOf 生效的新版本替代。
 // 用 front-matter 业务日期（effective_date/replaces），不用系统导入时间。
-func (e *Engine) businessActive(d *types.Document, asOf time.Time) bool {
+func (e *Engine) businessActive(d *types.Document, asOf time.Time, scopeKey string) bool {
 	if d.EffectiveDate.After(asOf) {
 		return false // 该时点尚未生效
 	}
+	if !d.ValidUntil.IsZero() && !asOf.Before(d.ValidUntil.AddDate(0, 0, 1)) {
+		return false
+	}
 	for _, other := range e.R.Docs() {
-		if other.ID == d.ID && other.Version != d.Version && other.EffectiveDate.After(d.EffectiveDate) {
-			if containsID(other.Replaces, d.ID+"@"+d.Version) || containsID(other.Replaces, d.ID) {
-				if !other.EffectiveDate.After(asOf) { // 替代方在该时点已生效
-					return false // 已被替代
-				}
-			}
+		if other == d || other.EffectiveDate.Before(d.EffectiveDate) || other.EffectiveDate.After(asOf) || !matchesScope(other.ScopeKeys, scopeKey) {
+			continue
+		}
+		if containsID(other.Replaces, d.ID+"@"+d.Version) {
+			return false
 		}
 	}
 	return true
@@ -458,7 +419,7 @@ func docTitle(e *Engine, s types.Section) string {
 }
 
 // build 模板化组装：事实句 + 逐条出处，不比较文风。
-// 同一文档新旧版本并存时，已废止版本显式标注，不与新版本混排误导。
+// 输入证据已经过业务日期筛选，不能根据导入时的状态标注历史适用版本。
 func (e *Engine) build(evids []evidence) types.Answer {
 	var b strings.Builder
 	seen := map[string]bool{} // 同父块去重
@@ -469,25 +430,14 @@ func (e *Engine) build(evids []evidence) types.Answer {
 			continue
 		}
 		seen[ev.Sec.ID] = true
-		statusTag := ""
-		for _, d := range e.R.Docs() {
-			if d.ID == ev.Sec.DocID && d.Version == ev.Sec.Version {
-				if d.Status == "superseded" {
-					statusTag = "（已废止，仅供历史参考）"
-				}
-				break
-			}
-		}
 		if first {
 			b.WriteString("根据资料：")
 			first = false
-		} else if statusTag != "" {
-			b.WriteString("另有历史口径：")
 		} else {
 			b.WriteString("另有规定：")
 		}
-		b.WriteString(fmt.Sprintf("《%s》%s%s（%s）：\"%s\"\n",
-			docTitle(e, ev.Sec), ev.Sec.Version, statusTag, ev.Sec.SectionPath, ev.Sentence))
+		b.WriteString(fmt.Sprintf("《%s》%s（%s）：\"%s\"\n",
+			docTitle(e, ev.Sec), ev.Sec.Version, ev.Sec.SectionPath, ev.Sentence))
 		cits = append(cits, types.Citation{
 			DocumentID: ev.Sec.DocID, Version: ev.Sec.Version,
 			Location: ev.Sec.SectionPath, Excerpt: ev.Sentence,
@@ -496,16 +446,13 @@ func (e *Engine) build(evids []evidence) types.Answer {
 	return types.Answer{Status: "answered", Answer: b.String(), Citations: cits}
 }
 
-// filterByAsOf 时间点过滤：asOf 时点业务上无效的命中剔除（历史可达）
-func (e *Engine) filterByAsOf(hits []types.Hit, asOf *time.Time) []types.Hit {
-	if asOf == nil {
-		return hits
-	}
+// filterByAsOf excludes documents outside the business date or requested scope.
+func (e *Engine) filterByAsOf(hits []types.Hit, asOf *time.Time, scopeKey string) []types.Hit {
 	var out []types.Hit
 	for _, h := range hits {
 		for _, d := range e.R.Docs() {
 			if d.ID == h.Section.DocID && d.Version == h.Section.Version {
-				if e.businessActive(d, *asOf) {
+				if matchesScope(d.ScopeKeys, scopeKey) && e.businessActive(d, *asOf, scopeKey) {
 					out = append(out, h)
 				}
 				break
@@ -513,6 +460,18 @@ func (e *Engine) filterByAsOf(hits []types.Hit, asOf *time.Time) []types.Hit {
 		}
 	}
 	return out
+}
+
+func matchesScope(keys []string, requested string) bool {
+	if requested == "" {
+		return true
+	}
+	for _, key := range keys {
+		if key == requested || key == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Engine) weak(query string, hits []types.Hit) bool {

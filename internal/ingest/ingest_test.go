@@ -61,6 +61,31 @@ func TestParseRejectsMissingFields(t *testing.T) {
 	}
 }
 
+func TestImportRejectsMalformedMetadataAndEmptyBody(t *testing.T) {
+	for _, tt := range []struct {
+		name, raw string
+	}{
+		{name: "unclosed front matter", raw: "---\nid: broken\nversion: v1\n"},
+		{name: "missing id", raw: strings.Replace(sampleDoc, "id: art-guide\n", "", 1)},
+		{name: "empty body", raw: "---\nid: empty\nversion: v1\ntitle: 空文档\neffective_date: 2025-01-01\n---\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := ingest.Parse([]byte(tt.raw)); err == nil {
+				t.Errorf("Parse(%s) error = nil, want error", tt.name)
+			}
+		})
+	}
+	for _, date := range []string{"2025-02-30", "not-a-date"} {
+		t.Run(date, func(t *testing.T) {
+			raw := strings.Replace(sampleDoc, "publish_date: 2025-03-01", "publish_date: "+date, 1)
+			meta, drafts := parseOK(t, raw)
+			if _, _, _, err := ingest.Build(meta, drafts); err == nil {
+				t.Errorf("Build(publish_date=%q) error = nil, want error", date)
+			}
+		})
+	}
+}
+
 func TestBuildRejectsInvalidValidityWindow(t *testing.T) {
 	for _, tt := range []struct {
 		name, until string

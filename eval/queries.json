@@ -19,5 +19,6 @@
   {"id":"Q18","query":"星光画笔的单价是多少元","expect_docs":["workshop-budget"],"expect_sources":[{"document_id":"workshop-budget","version":"v1"}],"expect_status":"answered","note":"表格单行证据"},
   {"id":"Q19","query":"报名星河工作坊要上传什么，入场券在哪里领取","expect_docs":["workshop-process","workshop-plan"],"expect_sources":[{"document_id":"workshop-process","version":"v1"},{"document_id":"workshop-plan","version":"v1"}],"expect_status":"answered","note":"流程与方案的双来源合并"},
   {"id":"Q20","query":"星图纸和星光画笔合计多少钱","expect_docs":[],"expect_status":"insufficient_evidence","note":"表格没有直接合计金额，离线规则不计算"},
-  {"id":"Q21","query":"能否推断星河工作坊的孩子会提高多少创造力","expect_docs":[],"expect_status":"insufficient_evidence","note":"项目介绍不支持效果推断"}
+  {"id":"Q21","query":"能否推断星河工作坊的孩子会提高多少创造力","expect_docs":[],"expect_status":"insufficient_evidence","note":"项目介绍不支持效果推断"},
+  {"id":"Q22","query":"社区艺术节当前的初审时限是多少","expect_docs":["art-guide"],"expect_sources":[{"document_id":"art-guide","version":"v2"}],"expect_status":"answered","note":"首次保留集 H03 失败后转入开发回归，不再计入保留集"}
 ]

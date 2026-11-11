@@ -60,7 +60,7 @@ func Handler(d Deps) http.Handler {
 			"latency_ms":   time.Since(start).Milliseconds(),
 			"generated_by": "template",
 		}
-		if asOf == nil && d.Engine.InferredTime() {
+		if asOf == nil && engine.QueryHasInferredTime(req.Query) {
 			resp["detected_time"] = req.Query // 时间点由问句文本推断（正则命中）
 		}
 		writeJSON(w, resp)

@@ -50,7 +50,7 @@ func main() {
 		}
 		doIngest(st, ret, dir)
 	case "ask":
-		q := flag.Arg(1)
+		q := strings.TrimSpace(flag.Arg(1))
 		if q == "" {
 			die(fmt.Errorf("用法：ragbot ask \"你的问题\""))
 		}
@@ -74,7 +74,7 @@ func main() {
 			die(err)
 		}
 	case "search":
-		q := flag.Arg(1)
+		q := strings.TrimSpace(flag.Arg(1))
 		if q == "" {
 			die(fmt.Errorf("用法：ragbot search \"查询\""))
 		}

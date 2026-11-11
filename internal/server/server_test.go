@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,5 +94,71 @@ func TestSearchMarksUnverifiedSource(t *testing.T) {
 	}
 	if len(result.Hits) != 1 || result.Hits[0].SourceStatus != "unverified" || result.Hits[0].SourceName != "guide.md" {
 		t.Errorf("GET /api/search hits = %+v, want one unverified guide.md hit", result.Hits)
+	}
+}
+
+func TestConcurrentAskKeepsDetectedTimePerRequest(t *testing.T) {
+	r := retriever.New()
+	h := server.Handler(server.Deps{Engine: engine.New(r), Ret: r})
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		for _, tt := range []struct {
+			query string
+			want  bool
+		}{
+			{query: "2025年申请要交哪些材料", want: true},
+			{query: "现在申请要交哪些材料", want: false},
+		} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				body, err := json.Marshal(map[string]string{"query": tt.query})
+				if err != nil {
+					t.Errorf("json.Marshal(%q) error = %v, want nil", tt.query, err)
+					return
+				}
+				request := httptest.NewRequest(http.MethodPost, "/api/ask", strings.NewReader(string(body)))
+				response := httptest.NewRecorder()
+				h.ServeHTTP(response, request)
+				if response.Code != http.StatusOK {
+					t.Errorf("POST /api/ask(%q) status = %d, want 200", tt.query, response.Code)
+					return
+				}
+				var result map[string]json.RawMessage
+				if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+					t.Errorf("json.Unmarshal(POST /api/ask(%q)) error = %v, want nil", tt.query, err)
+					return
+				}
+				_, got := result["detected_time"]
+				if got != tt.want {
+					t.Errorf("POST /api/ask(%q) detected_time present = %t, want %t", tt.query, got, tt.want)
+				}
+			}()
+		}
+	}
+	wg.Wait()
+}
+
+func TestAskRejectsInvalidRequests(t *testing.T) {
+	r := retriever.New()
+	h := server.Handler(server.Deps{Engine: engine.New(r), Ret: r})
+	for _, tt := range []struct {
+		name, body string
+	}{
+		{name: "blank query", body: `{"query":"   "}`},
+		{name: "malformed JSON", body: `{"query":`},
+		{name: "bad date", body: `{"query":"申请材料","as_of":"2025-02-30"}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/ask", strings.NewReader(tt.body))
+			response := httptest.NewRecorder()
+			h.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Errorf("POST /api/ask(%s) status = %d, want 400", tt.name, response.Code)
+			}
+			if strings.Contains(response.Body.String(), `"status":"answered"`) {
+				t.Errorf("POST /api/ask(%s) body = %q, want no successful answer", tt.name, response.Body.String())
+			}
+		})
 	}
 }

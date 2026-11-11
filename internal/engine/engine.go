@@ -14,12 +14,8 @@ import (
 
 // Engine 回答编排器
 type Engine struct {
-	R                retrieverIface
-	lastInferredTime bool // 最近一次 Answer 是否从问句推断出时间点
+	R retrieverIface
 }
-
-// InferredTimeTime 供 API 层报告"本次回答是否基于问句推断的时间点"
-func (e *Engine) InferredTime() bool { return e.lastInferredTime }
 
 type retrieverIface interface {
 	SearchVerified(query string, n int) []types.Hit
@@ -44,12 +40,9 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 // AnswerWithScope answers using only documents whose scope_keys include scopeKey or *.
 // An empty scopeKey keeps the existing unscoped behavior.
 func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string) types.Answer {
-	inferred := false
 	if asOf == nil {
 		asOf = inferQueryTime(query)
-		inferred = asOf != nil
 	}
-	e.lastInferredTime = inferred
 	if asOf == nil {
 		localNow := time.Now()
 		today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)
@@ -206,6 +199,7 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 			if isEligibilityQuery(focusQuery) && strings.Contains(sent, "申请人") {
 				score += 0.40
 			}
+			score += directPhraseScore(focusQuery, sent)
 			if score >= 0.34 { // 句子级对齐阈值（dev 集调参）
 				out = append(out, evidence{Sentence: sent, Sec: h.Section, Chunk: h.Chunk, Title: title, Score: score})
 			}
@@ -243,6 +237,24 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 		out = out[:6]
 	}
 	return out
+}
+
+// directPhraseScore keeps exact two-character subject phrases available even
+// when a longer question dilutes the character overlap score.
+func directPhraseScore(query, sentence string) float64 {
+	seen := map[string]bool{}
+	score := 0.0
+	for _, term := range tokenize.Tokenize(query) {
+		if len([]rune(term)) != 2 || seen[term] || !strings.Contains(sentence, term) {
+			continue
+		}
+		seen[term] = true
+		score += 0.16
+		if score >= 0.48 {
+			return 0.48
+		}
+	}
+	return score
 }
 
 func isEligibilityQuery(query string) bool {

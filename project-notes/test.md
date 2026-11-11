@@ -141,3 +141,40 @@
 **最终结论：**已认证索引与待审核搜索索引隔离；待审核文档不影响正式 BM25 分数。新增 BOM 缺陷已修复并复测。既有 BUG-3、BUG-10 和未合并保留集 H13 不计入本次通过数。
 
 **合并核验：**`git merge --no-ff --no-commit feature/unstructured-markdown-ingest` 无冲突；`MERGE_HEAD` 指向任务提交，目标分支为 `work/ragbot`；`git diff --cached --check` 通过。未合入 `main`。
+## 2026-11-11：完善交付验证（未达合并门槛）
+
+**分支：**`feature/delivery-validation`。**环境：**Windows PowerShell、Go 1.27.3；`GOCACHE` 指向忽略的 `data/.gocache`；`CGO_ENABLED=0`，本机无 `gcc`。CLI 使用全新隔离目录 `data/delivery-final-20261111`，不改默认数据。
+
+| 实际执行 | 通过 | 失败 | 跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| 并发 HTTP、恶意文档、无效元数据和原有相关包聚焦测试 | 3 个 Go 包 | 0 | 0 | 新增负例与旧回归通过 |
+| `go test -count=1 -json ./...` | 36 个顶层测试、25 个子测试 | 0 | 0 | 全包通过 |
+| `go vet ./...`、`gofmt -l`（七个改动的 Go 文件）、`git diff --check` | 3 | 0 | 0 | 无诊断或格式问题 |
+| CLI 空白 `ask '   '` | 1 | 0 | 0 | 非零退出并给出明确用法错误 |
+| 新目录导入 `docs/`，随后重复导入 | 首次 12/12 created；再次 12/12 duplicate | 0 | 0 | 索引总数保持 12 |
+| 开发集 `eval/queries.json` | 21 | 0 | 0 | Hit@5 18/18、来源可核验 18/18、拒答 3/3 |
+| 首次保留集 `eval/holdout.json` | 11 | 1（H03） | 0 | Hit@5 10/10、有出处 9/10、来源可核验 9/10、拒答 2/2；H03 命中正确文档但回答拒答 |
+| `go test -race ./...` | 0 | 0 | 未运行 | 当前 Go 配置 `CGO_ENABLED=0` 且无 C 编译器；未宣称 race detector 通过 |
+
+**后续复测：**H03 加入开发回归 Q22 后，针对初审时限的 CLI 问答返回现行指南 v2 的“七个工作日内完成初审”，全量 `go test -count=1 ./...` 通过。开发集复评为 22/22，Hit@5、出处、来源均 19/19，拒答 3/3；原始失败报告另存于 `eval/baseline/holdout-initial.json`。
+
+**新独立问法：**新增 H13 后，当前验证文件 12/13，Hit@5 11/11、出处与来源 10/11、拒答 2/2。H13 命中正确文档但拒答；排除已用于修复的 H03，未参与修复的 12 条为 11/12。该质量失败仍在，分支未合并。
+
+**本轮收尾检查：**`go test -count=1 -json ./...` 为 37 个顶层测试、25 个子测试通过，0 失败、0 跳过；`go vet ./...`、`gofmt -l`（八个 Go 文件）、`git diff --check` 均通过。Go 检查通过不抵消保留评测 H13 的失败；`go test -race` 仍因环境缺 C 编译器未运行。
+
+## 2026-11-11：交付验证合并复测
+
+**分支：**`merge/delivery-validation`。**环境：**Windows PowerShell，`CGO_ENABLED=0`。使用全新 `data/merge-validation-check-20261111` 目录，不使用默认索引。此次记录以当前合并代码的实际输出为准；旧分支报告保留作历史记录。
+
+| 实际执行 | 通过 | 失败 | 跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| `go test -count=1 ./...` | 6 个有测试的包 | 0 | 0 | 全包通过；其余 4 包无测试文件 |
+| 并发 HTTP、待审核搜索、错误元数据聚焦测试 | 3 个顶层测试、5 个嵌套子测试 | 0 | 0 | 64 个并发 HTTP 请求的时间提示独立；两边新增测试均保留 |
+| `go vet ./...`、`git diff --check` | 2 项检查 | 0 | 0 | 无诊断、无空白错误 |
+| `gofmt -w`（两份冲突解决后的 Go 测试文件） | 2 个文件 | 0 | 0 | 格式化完成；后续复测通过 |
+| `go run ./cmd/ragbot -data data/merge-validation-check-20261111 ingest docs` | 12 份文档 | 0 | 0 | 全新索引导入 12/12 |
+| 同目录开发集 `evaluate` | 22 条 | 0 | 0 | 22/22；Hit@5、出处、来源均 19/19，拒答 3/3 |
+| 同目录 `-queries eval/holdout.json evaluate` | 12 条 | 1 条（H13） | 0 | 12/13；Hit@5 11/11，出处、来源 10/11，拒答 2/2。H13 为保留的已知语义 bad case，不记作通过 |
+| `go test -race ./...` | 0 | 0 | 未运行 | `CGO_ENABLED=0`，本环境未完成竞态检测器验证 |
+
+**结论：**BUG-3 并发行为复测通过；H13/BUG-12 与 BUG-10 继续开放。开发集的 22/22 不代表语义正确率；排除用于修复的 H03，未参与修复的保留题为 11/12。测试失败数如实保留，不将已知 bad case 当作通过。

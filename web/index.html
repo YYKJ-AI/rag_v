@@ -1,155 +1,278 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ragbot — 可溯源知识库问答</title>
-<style>
-  :root {
-    --bg: #f7f8fa; --card: #ffffff; --border: #e2e5ea;
-    --text: #1a1c20; --muted: #6b7280;
-    --blue: #185fa5; --blue-bg: #e6f1fb;
-    --green: #3b6d11; --green-bg: #eaf3de;
-    --amber: #854f0b; --amber-bg: #faeeda;
-    --red: #a32d2d; --red-bg: #fcebeb;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
-  h1 { font-size: 20px; font-weight: 600; margin: 8px 0 4px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-  .card { background: var(--card); border: 1px solid var(--border);
-          border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  .row { display: flex; gap: 10px; }
-  input[type=text], input[type=date] {
-    flex: 1; padding: 10px 12px; border: 1px solid var(--border);
-    border-radius: 8px; font-size: 14px; outline: none;
-  }
-  input[type=text]:focus, input[type=date]:focus { border-color: var(--blue); }
-  input[type=date] { flex: 0 0 160px; color: var(--muted); }
-  button { padding: 10px 22px; border: 0; border-radius: 8px;
-           background: var(--blue); color: #fff; font-size: 14px; cursor: pointer; }
-  button:hover { opacity: .9; }
-  button:disabled { opacity: .5; cursor: wait; }
-  .examples { margin-top: 10px; font-size: 12px; color: var(--muted); }
-  .examples span { display: inline-block; margin: 2px 6px 2px 0; padding: 3px 10px;
-                   background: var(--blue-bg); color: var(--blue);
-                   border-radius: 20px; cursor: pointer; }
-  .badge { display: inline-block; padding: 2px 12px; border-radius: 20px;
-           font-size: 12px; font-weight: 600; margin-bottom: 10px; }
-  .b-answered { background: var(--green-bg); color: var(--green); }
-  .b-conflict { background: var(--amber-bg); color: var(--amber); }
-  .b-insufficient_evidence { background: var(--red-bg); color: var(--red); }
-  .answer { white-space: pre-wrap; }
-  .meta { color: var(--muted); font-size: 12px; margin-top: 10px; }
-  .cits { margin-top: 14px; }
-  .cits h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
-  .cit { border-left: 3px solid var(--blue); background: var(--blue-bg);
-         border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 8px;
-         font-size: 13px; }
-  .cit .loc { color: var(--muted); font-size: 12px; }
-  .cit .exc { margin-top: 2px; }
-  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
-  .err { background: var(--red-bg); color: var(--red); padding: 8px 12px;
-         border-radius: 8px; font-size: 13px; margin-top: 10px; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ragbot · 证据工作台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #edf2f3;
+      --surface: #fbfcfc;
+      --ink: #18323b;
+      --quiet: #526a72;
+      --deep: #173c47;
+      --source: #287584;
+      --source-bg: #e4eff0;
+      --alert: #a45d32;
+      --alert-bg: #f8eee7;
+      --deny: #9b4342;
+      --deny-bg: #f7eaea;
+      --rule: #cbdadd;
+      --sans: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+      --serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.65 var(--sans); }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 3px solid var(--source); outline-offset: 3px; }
+    .masthead { background: var(--deep); color: #f4fafb; border-bottom: 5px solid var(--source); }
+    .masthead-inner { max-width: 1260px; margin: auto; padding: 25px 30px 26px; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .brand { font: 700 22px/1.1 var(--serif); letter-spacing: .06em; }
+    .brand span { font: 500 13px/1.2 var(--sans); letter-spacing: 0; color: #c7dadd; margin-left: 13px; }
+    .service { display: flex; align-items: center; gap: 8px; color: #c7dadd; font-size: 12px; white-space: nowrap; }
+    .service-dot { width: 8px; height: 8px; border-radius: 50%; background: #d6a574; }
+    .service-dot.ready { background: #8fc6a8; }
+    .layout { max-width: 1260px; margin: auto; padding: 36px 30px 72px; display: grid; grid-template-columns: minmax(290px, 390px) minmax(0, 1fr); gap: 32px; align-items: start; }
+    .lead { margin: 0 0 26px; }
+    h1 { font: 700 clamp(29px, 3.1vw, 43px)/1.25 var(--serif); letter-spacing: -.025em; margin: 0 0 13px; }
+    .lead p { max-width: 34ch; margin: 0; color: var(--quiet); }
+    .form-panel { background: var(--surface); border: 1px solid var(--rule); padding: 25px; }
+    .field { display: block; margin-bottom: 19px; }
+    .field > span { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .field small { display: block; color: var(--quiet); font-size: 12px; margin-top: 6px; }
+    textarea, input[type="date"], input[type="text"] { width: 100%; color: var(--ink); background: #fff; border: 1px solid #aebfc3; border-radius: 4px; padding: 11px 12px; outline: none; }
+    textarea { min-height: 112px; resize: vertical; line-height: 1.6; }
+    textarea:focus, input:focus { border-color: var(--source); box-shadow: 0 0 0 2px #bedbdf; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .submit { width: 100%; border: 0; background: var(--deep); color: #fff; padding: 13px 18px; font-weight: 700; border-radius: 4px; }
+    .submit:hover { background: #265562; }
+    .submit:disabled { opacity: .65; cursor: wait; }
+    .error { display: none; color: var(--deny); background: var(--deny-bg); border-left: 3px solid var(--deny); padding: 9px 11px; margin: 14px 0 0; font-size: 13px; }
+    .examples { margin-top: 25px; }
+    .examples h2, .boundary h2 { font-size: 13px; margin: 0 0 12px; font-weight: 700; }
+    .examples button { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); padding: 10px 2px; color: var(--source); background: transparent; }
+    .examples button:last-child { border-bottom: 1px solid var(--rule); }
+    .examples button:hover { color: var(--deep); text-decoration: underline; }
+    .boundary { color: var(--quiet); margin-top: 28px; padding-left: 15px; border-left: 3px solid var(--rule); font-size: 13px; }
+    .boundary p { margin: 0; }
+    .desk { min-width: 0; }
+    .desk-head { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding: 0 0 11px; border-bottom: 2px solid var(--deep); }
+    .desk-head h2 { font: 700 22px/1.3 var(--serif); margin: 0; }
+    .desk-head span { color: var(--quiet); font-size: 12px; }
+    .empty { min-height: 350px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 10px; color: var(--quiet); border-bottom: 1px solid var(--rule); padding: 24px; }
+    .empty strong { color: var(--ink); font: 700 23px/1.3 var(--serif); }
+    .result { display: none; }
+    .verdict { padding: 28px 0 25px; border-bottom: 1px solid var(--rule); }
+    .status { display: inline-block; font-size: 12px; font-weight: 700; color: var(--source); background: var(--source-bg); padding: 4px 10px; }
+    .status.conflict { color: var(--alert); background: var(--alert-bg); }
+    .status.insufficient_evidence { color: var(--deny); background: var(--deny-bg); }
+    .answer { white-space: pre-wrap; overflow-wrap: anywhere; font: 500 19px/1.8 var(--serif); margin: 17px 0; }
+    .meta { color: var(--quiet); font-size: 12px; }
+    .evidence-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 26px 0 15px; }
+    .evidence-head h3 { margin: 0; font: 700 19px/1.3 var(--serif); }
+    .evidence-head span { color: var(--quiet); font-size: 12px; }
+    .citations { display: grid; gap: 12px; }
+    .citation { background: var(--surface); border: 1px solid var(--rule); border-left: 5px solid var(--source); padding: 17px 20px; }
+    .citation.inherited { border-left-color: var(--alert); }
+    .citation-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 9px; }
+    .citation-role { color: var(--source); font-size: 12px; font-weight: 700; }
+    .citation.inherited .citation-role { color: var(--alert); }
+    .citation-doc { font-weight: 700; overflow-wrap: anywhere; }
+    .citation-loc { color: var(--quiet); font-size: 12px; overflow-wrap: anywhere; }
+    .citation blockquote { margin: 11px 0 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .no-sources { padding: 20px; background: var(--deny-bg); color: var(--deny); font-size: 13px; }
+    @media (max-width: 850px) {
+      .layout { grid-template-columns: 1fr; padding: 28px 20px 55px; gap: 35px; }
+      .lead p { max-width: 60ch; }
+    }
+    @media (max-width: 520px) {
+      .masthead-inner { padding: 18px 20px; align-items: start; }
+      .brand span { display: block; margin: 7px 0 0; }
+      .service { white-space: normal; text-align: right; }
+      .filters { grid-template-columns: 1fr; }
+      .form-panel { padding: 19px; }
+      .answer { font-size: 17px; }
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>ragbot · 可溯源知识库问答</h1>
-  <div class="sub">确定性检索链路 — 每条回答均附逐条出处（文档 / 版本 / 位置 / 原文摘录）</div>
-
-  <div class="card">
-    <div class="row">
-      <input type="text" id="q" placeholder="输入问题，例如：现在申请要交哪些材料"
-             onkeydown="if(event.key==='Enter')ask()">
-      <button id="btn" onclick="ask()">提问</button>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="brand">ragbot <span>证据工作台</span></div>
+      <div class="service" role="status"><span id="service-dot" class="service-dot"></span><span id="service-text">检查本机服务…</span></div>
     </div>
-    <div class="examples">试试：
-      <span onclick="fill('现在申请要交哪些材料')">现在申请要交哪些材料</span>
-      <span onclick="fill('艺术节专项经费最多能补多少钱')">经费补助上限（冲突示例）</span>
-      <span onclick="fill('艺术节可以带宠物入场吗')">可以带宠物吗（拒答示例）</span>
-      <span onclick="fill('2025年申请艺术节要准备几项材料')">2025年要几项材料（自动识别历史时点）</span>
-    </div>
-    <div id="err" class="err" style="display:none"></div>
-  </div>
+  </header>
+  <main class="layout">
+    <section aria-labelledby="page-title">
+      <div class="lead">
+        <h1 id="page-title">把答案放回出处里。</h1>
+        <p>输入问题，查看系统依据哪份文档、哪个版本和哪段原文作答。证据不足时会直接说明。</p>
+      </div>
+      <form id="ask-form" class="form-panel">
+        <label class="field" for="query">
+          <span>你的问题</span>
+          <textarea id="query" name="query" placeholder="例如：现在申请要交哪些材料" required></textarea>
+        </label>
+        <div class="filters">
+          <label class="field" for="as-of">
+            <span>查询日期（可选）</span>
+            <input id="as-of" name="as_of" type="date">
+            <small>查看指定日期的有效版本</small>
+          </label>
+          <label class="field" for="scope-key">
+            <span>适用范围（可选）</span>
+            <input id="scope-key" name="scope_key" type="text" placeholder="如 resident" autocomplete="off">
+            <small>填写文档声明的范围代码</small>
+          </label>
+        </div>
+        <button id="submit" class="submit" type="submit">查询并查看证据</button>
+        <p id="error" class="error" role="alert"></p>
+      </form>
+      <div class="examples" aria-label="示例问题">
+        <h2>从示例开始</h2>
+        <button type="button" data-query="现在申请要交哪些材料">现在申请要交哪些材料</button>
+        <button type="button" data-query="艺术节专项经费最多能补多少钱">经费上限是否有冲突</button>
+        <button type="button" data-query="艺术节可以带宠物入场吗">证据不足时怎样显示</button>
+      </div>
+      <aside class="boundary">
+        <h2>阅读提示</h2>
+        <p>出处可定位不代表语义一定充分。演示资料为虚构内容；如引用旧版条款，请同时核对新版的沿用声明。</p>
+      </aside>
+    </section>
+    <section class="desk" aria-labelledby="desk-title">
+      <div class="desk-head"><h2 id="desk-title">答复与证据</h2><span>仅展示当前这次查询</span></div>
+      <div id="empty" class="empty"><strong>等待一个问题</strong><span>提交后，回答与逐条原文会显示在这里。</span></div>
+      <div id="result" class="result" aria-live="polite">
+        <div class="verdict">
+          <span id="status" class="status"></span>
+          <div id="answer" class="answer"></div>
+          <div id="meta" class="meta"></div>
+        </div>
+        <div class="evidence-head"><h3>来源记录</h3><span id="evidence-count"></span></div>
+        <div id="citations" class="citations"></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusText = {
+      answered: '已回答',
+      conflict: '存在冲突 · 请人工核实',
+      insufficient_evidence: '证据不足 · 已拒答'
+    };
+    const roleText = {
+      current_pointer: '现行文档的沿用声明',
+      inherited_clause: '被引用的旧版条款'
+    };
 
-  <div id="result" class="card" style="display:none">
-    <span id="badge" class="badge"></span>
-    <div id="answer" class="answer"></div>
-    <div id="meta" class="meta"></div>
-    <div id="cits" class="cits"></div>
-  </div>
-
-  <div id="placeholder" class="card"><div class="empty">输入问题开始提问。所有回答均基于已导入的资料并附出处。</div></div>
-</div>
-
-<script>
-const STATUS_TEXT = {
-  answered: '已回答 · 有出处',
-  conflict: '检测到冲突 · 请人工核实',
-  insufficient_evidence: '证据不足 · 已拒答'
-};
-
-async function ask() {
-  const q = document.getElementById('q').value.trim();
-  const err = document.getElementById('err');
-  err.style.display = 'none';
-  if (!q) return;
-  const btn = document.getElementById('btn');
-  btn.disabled = true; btn.textContent = '检索中…';
-  try {
-    const resp = await fetch('/api/ask', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({query: q})
-    });
-    if (!resp.ok) {
-      const e = await resp.json().catch(() => ({error: resp.statusText}));
-      throw new Error(e.error || '请求失败');
+    async function checkService() {
+      try {
+        const response = await fetch('/api/status', {cache: 'no-store'});
+        if (!response.ok) throw new Error('unavailable');
+        $('service-dot').classList.add('ready');
+        $('service-text').textContent = '本机服务就绪';
+      } catch (_) {
+        $('service-text').textContent = '本机服务暂不可用';
+      }
     }
-    render(await resp.json());
-  } catch (e) {
-    err.textContent = e.message; err.style.display = 'block';
-  } finally {
-    btn.disabled = false; btn.textContent = '提问';
-  }
-}
 
-function render(data) {
-  document.getElementById('placeholder').style.display = 'none';
-  const box = document.getElementById('result');
-  box.style.display = 'block';
-  const badge = document.getElementById('badge');
-  badge.textContent = STATUS_TEXT[data.status] || data.status;
-  badge.className = 'badge b-' + data.status;
-  document.getElementById('answer').textContent = data.answer.trim();
-  document.getElementById('meta').textContent =
-    '耗时 ' + data.latency_ms + 'ms · 生成方式 ' + data.generated_by +
-    (data.detected_time ? ' · 已从问句识别时间点，按历史有效版本回答' : '');
-  const cits = document.getElementById('cits');
-  if (!data.citations || data.citations.length === 0) {
-    cits.innerHTML = '<h3>出处</h3><div class="empty">无（拒答不捏造出处）</div>';
-    return;
-  }
-  cits.innerHTML = '<h3>出处（' + data.citations.length + ' 条）</h3>' +
-    data.citations.map(c =>
-      '<div class="cit"><div class="loc">《' + esc(c.document_id) + '》' +
-      esc(c.version) + ' · ' + esc(c.location) + '</div>' +
-      '<div class="exc">"' + esc(c.excerpt) + '"</div></div>'
-    ).join('');
-}
+    function render(data, queryDate) {
+      $('empty').hidden = true;
+      $('result').style.display = 'block';
+      const status = data.status || '';
+      $('status').className = 'status ' + (statusText[status] ? status : '');
+      $('status').textContent = statusText[status] || '状态未知';
+      $('answer').textContent = data.answer || '未返回回答内容。';
+      const meta = [];
+      if (queryDate) meta.push('查询日期：' + queryDate);
+      else if (data.detected_time) meta.push('已从问题识别历史时间');
+      else meta.push('按当前有效版本查询');
+      if (typeof data.latency_ms === 'number') meta.push('处理耗时：' + data.latency_ms + ' ms');
+      $('meta').textContent = meta.join(' · ');
 
-function fill(q) {
-  document.getElementById('q').value = q;
-  ask();
-}
+      const citations = Array.isArray(data.citations) ? data.citations : [];
+      $('evidence-count').textContent = citations.length + ' 条';
+      $('citations').replaceChildren();
+      if (!citations.length) {
+        const note = document.createElement('div');
+        note.className = 'no-sources';
+        note.textContent = '没有足够的可核验证据，本次不提供出处。';
+        $('citations').append(note);
+        return;
+      }
+      for (const citation of citations) {
+        const item = document.createElement('article');
+        item.className = 'citation' + (citation.role === 'inherited_clause' ? ' inherited' : '');
+        const top = document.createElement('div');
+        top.className = 'citation-top';
+        if (roleText[citation.role]) {
+          const role = document.createElement('span');
+          role.className = 'citation-role';
+          role.textContent = roleText[citation.role];
+          top.append(role);
+        }
+        const doc = document.createElement('span');
+        doc.className = 'citation-doc';
+        doc.textContent = (citation.document_id || '未知文档') + ' @ ' + (citation.version || '未知版本');
+        const loc = document.createElement('span');
+        loc.className = 'citation-loc';
+        loc.textContent = citation.location || '未提供位置';
+        top.append(doc, loc);
+        const excerpt = document.createElement('blockquote');
+        excerpt.textContent = citation.excerpt || '';
+        item.append(top, excerpt);
+        $('citations').append(item);
+      }
+    }
 
-function esc(s) {
-  return String(s).replace(/[&<>"]/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-}
-</script>
+    $('ask-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const query = $('query').value.trim();
+      if (!query) {
+        $('error').textContent = '请输入问题后再查询。';
+        $('error').style.display = 'block';
+        $('query').focus();
+        return;
+      }
+      $('error').style.display = 'none';
+      $('result').style.display = 'none';
+      $('empty').hidden = false;
+      $('empty').querySelector('strong').textContent = '正在查找证据';
+      $('empty').querySelector('span').textContent = '正在核对文档版本与原文。';
+      const button = $('submit');
+      button.disabled = true;
+      button.textContent = '查询中…';
+      const asOf = $('as-of').value;
+      try {
+        const response = await fetch('/api/ask', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query, as_of: asOf, scope_key: $('scope-key').value.trim()})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '查询失败，请检查服务状态后重试。');
+        render(data, asOf);
+      } catch (error) {
+        $('empty').querySelector('strong').textContent = '本次未能完成查询';
+        $('empty').querySelector('span').textContent = '请检查输入和本机服务。';
+        $('error').textContent = error.message || '查询失败，请重试。';
+        $('error').style.display = 'block';
+      } finally {
+        button.disabled = false;
+        button.textContent = '查询并查看证据';
+      }
+    });
+
+    document.querySelectorAll('[data-query]').forEach((button) => {
+      button.addEventListener('click', () => {
+        $('query').value = button.dataset.query;
+        $('ask-form').requestSubmit();
+      });
+    });
+    checkService();
+  </script>
 </body>
 </html>

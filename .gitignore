@@ -2,4 +2,8 @@ data/
 ragbot.exe
 *.exe
 eval/baseline/latest.json
-project-notes/
+project-notes/*
+!project-notes/Plan.md
+!project-notes/issues.md
+!project-notes/test.md
+!project-notes/bug.md

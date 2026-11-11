@@ -178,3 +178,19 @@
 | `go test -race ./...` | 0 | 0 | 未运行 | `CGO_ENABLED=0`，本环境未完成竞态检测器验证 |
 
 **结论：**BUG-3 并发行为复测通过；H13/BUG-12 与 BUG-10 继续开放。开发集的 22/22 不代表语义正确率；排除用于修复的 H03，未参与修复的保留题为 11/12。测试失败数如实保留，不将已知 bad case 当作通过。
+
+## 2026-11-11：证据工作台前端聚焦验证
+
+**分支：**`feature/evidence-workbench-ui`。**环境：**Windows PowerShell；使用已导入的 `data/merge-validation-check-20261111`；前端无外部依赖。
+
+| 实际执行 | 通过 | 失败 | 跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| `node --check data/evidence-ui-script-check.js`（从 HTML 提取内嵌脚本） | 1 | 0 | 0 | JavaScript 语法通过；直接对 `.html` 使用 `node --check` 不适用，未计为产品失败 |
+| `git diff --check` | 1 | 0 | 0 | 无空白错误 |
+| `go test -count=1 ./internal/server ./internal/engine` | 2 个包 | 0 | 0 | API 与问答相关回归通过 |
+| `go vet ./...` | 1 | 0 | 0 | 无诊断 |
+| 启动 `ragbot serve` 后 `GET /`、`GET /api/status` | 2 | 0 | 0 | 首页返回 200 且包含“证据工作台”，状态接口返回 `ok: true` |
+| `POST /api/ask`：范围查询、拒答查询 | 2 | 0 | 0 | 范围查询返回 answered 且有引用；宠物问题返回 insufficient_evidence 且零引用 |
+| 浏览器截图 | 0 | 0 | 未运行 | 环境有 Edge，但本轮没有自动化浏览器驱动；不冒充视觉截图验收 |
+
+**结果：**前端请求数据契约、日期/范围字段、拒答和来源角色的渲染路径已核对；浏览器级视觉检查留给后续有驱动的环境。

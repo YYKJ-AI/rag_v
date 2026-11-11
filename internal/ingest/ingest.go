@@ -4,6 +4,7 @@ package ingest
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"ragbot/internal/tokenize"
 	"ragbot/internal/types"
 )
+
+var explicitRelationTarget = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9_.-]*#[A-Za-z0-9][A-Za-z0-9_.-]*`)
 
 // DocMeta front-matter 元数据
 type DocMeta struct {
@@ -228,16 +231,73 @@ func Build(meta *DocMeta, drafts []SectionDraft) (*types.Document, []*types.Sect
 			}
 			seenChunk[fp] = true
 			seq++
-			chunks = append(chunks, &types.Chunk{
+			chunk := &types.Chunk{
 				ID:        fmt.Sprintf("%s@%s#chunk-%d", meta.ID, meta.Version, seq),
 				SectionID: sec.ID,
 				Text:      c,
 				Tokens:    toks,
 				SimHash:   fp,
-			})
+			}
+			chunk.Kind, chunk.Relations = parseRelations(c, chunk.ID)
+			chunks = append(chunks, chunk)
 		}
 	}
 	return doc, sections, chunks, nil
+}
+
+// parseRelations recognizes only explicit, auditable pointer syntax. It never
+// guesses a target document or section from nearby text.
+func parseRelations(text, sourceChunkID string) (string, []types.Relation) {
+	type relationMarker struct {
+		needle string
+		typ    types.RelationType
+	}
+	markers := []relationMarker{
+		{needle: "沿用", typ: types.RelationInherits},
+		{needle: "引用", typ: types.RelationReferences},
+		{needle: "参照", typ: types.RelationReferences},
+	}
+	var pointerSentences []string
+	var typ types.RelationType
+	for _, sentence := range strings.SplitAfter(text, "。") {
+		for _, marker := range markers {
+			if strings.Contains(sentence, marker.needle) {
+				pointerSentences = append(pointerSentences, strings.TrimSpace(sentence))
+				typ = marker.typ
+				break
+			}
+		}
+	}
+	if typ == "" {
+		return "", nil
+	}
+	relation := types.Relation{
+		SourceChunkID: sourceChunkID,
+		Type:          typ,
+		RawPointer:    strings.Join(pointerSentences, " "),
+		Status:        "unresolved",
+	}
+	if len(pointerSentences) != 1 {
+		return "pointer", []types.Relation{relation}
+	}
+	matches := explicitRelationTarget.FindAllString(pointerSentences[0], -1)
+	if len(matches) != 1 {
+		return "pointer", []types.Relation{relation}
+	}
+	match := matches[0]
+	left, section, ok := strings.Cut(match, "#")
+	if !ok {
+		return "pointer", []types.Relation{relation}
+	}
+	docID, version, ok := strings.Cut(left, "@")
+	if !ok || docID == "" || version == "" || section == "" {
+		return "pointer", []types.Relation{relation}
+	}
+	relation.TargetDocID = docID
+	relation.TargetVersion = version
+	relation.TargetSectionID = docID + "@" + version + "#" + section
+	relation.Status = "parsed"
+	return "pointer", []types.Relation{relation}
 }
 
 func parseDate(value string) (time.Time, error) {

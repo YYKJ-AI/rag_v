@@ -24,6 +24,7 @@ func (e *Engine) InferredTime() bool { return e.lastInferredTime }
 type retrieverIface interface {
 	Search(query string, n int) []types.Hit
 	Docs() []*types.Document
+	Section(id string) (types.Section, bool)
 }
 
 func New(r retrieverIface) *Engine { return &Engine{R: r} }
@@ -64,11 +65,18 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 			Answer: "资料中未找到覆盖该问题的充分依据，无法给出有出处的回答。",
 		}
 	}
+	evids := e.extract(query, hits)
+	if len(splitQueryClauses(query)) == 1 {
+		if answer, handled := e.answerFromPointer(query, evids, *asOf, scopeKey); handled {
+			return answer
+		}
+	}
+	evids = withoutPointerDeclarations(evids)
 	if clauses := splitQueryClauses(query); len(clauses) > 1 {
 		var combined []evidence
 		for _, clause := range clauses {
 			focus := stripTitleTopic(clause, e.R.Docs())
-			candidates := e.extract(focus, hits)
+			candidates := withoutPointerDeclarations(e.extract(focus, hits))
 			if len(candidates) == 0 || needsUnsupportedReasoning(clause, candidates) || (isModalQuestion(clause) && !hasModalVerdict(candidates)) {
 				return types.Answer{Status: "insufficient_evidence", Answer: "至少一个子问题缺少可直接核验的证据，无法合并回答。"}
 			}
@@ -80,7 +88,6 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 		return e.build(combined)
 	}
 
-	evids := e.extract(query, hits)
 	if len(evids) == 0 {
 		return types.Answer{
 			Status: "insufficient_evidence",
@@ -165,6 +172,7 @@ func splitQueryClauses(query string) []string {
 type evidence struct {
 	Sentence string
 	Sec      types.Section
+	Chunk    types.Chunk
 	Title    string  // 所属文档标题（冲突主题门控用）
 	Score    float64 // 上下文对齐分（排序与相对截断基准）
 }
@@ -199,7 +207,7 @@ func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 				score += 0.40
 			}
 			if score >= 0.34 { // 句子级对齐阈值（dev 集调参）
-				out = append(out, evidence{Sentence: sent, Sec: h.Section, Title: title, Score: score})
+				out = append(out, evidence{Sentence: sent, Sec: h.Section, Chunk: h.Chunk, Title: title, Score: score})
 			}
 		}
 	}

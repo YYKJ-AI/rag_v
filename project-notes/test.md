@@ -94,3 +94,19 @@
 | 对照旧 14 条状态及引用集合；手工核对 Q02、Q03、Q08、Q14、Q15、Q17、Q19 | 14 条状态、7 条重点引用 | 0（按既有评测口径） | 0 | 旧状态全保持；11 条引用集合变化。Q03/Q08/Q14 有不相关附带引用，作为未解决 BUG-10 记录，不宣称语义通过 |
 
 **最终复测统计：**32 个顶层 Go 测试、17 个子测试，失败 0、跳过 0；隔离导入 12/12、开发评测 21/21。首次因缓存阻断的命令及一次真实回归失败单列，均已定位并复测；语义相关性问题保持未解决。
+
+## 2026-11-11：V1 跨版本指针证据链
+
+**分支：**`feature/document-pointer-relations`。**环境：**Windows PowerShell、Go 1.27.3；`GOCACHE` 指向项目内忽略目录 `data/.gocache`。隔离演示目录为 `data/pointer-eval-20261111`，不改默认数据。
+
+| 实际执行 | 通过 | 失败 | 跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| 初次聚焦测试（接口实现尚未完成时） | 0 | 1 次编译失败 | 0 | `answerFromPointer` 未定义；补齐实现后复测通过，不计入最终通过数 |
+| 指针聚焦测试 `go test -count=1 -run 'TestInheritedClauseShowsBothSources|TestPointerMissingTargetRefuses|TestPointerScopeMismatchAndReferenceDoNotInherit|TestPointerDoesNotFollowSecondHopOrFutureTarget|TestBuildPointerRelationAndPersist|TestBuildUnresolvedPointerAndExplicitReference' -v ./internal/engine ./internal/ingest` | 6 个顶层测试、5 个子测试 | 0 | 0 | 双来源、历史、显式引用、存储持久化及拒答边界通过 |
+| 最终 `go test -count=1 ./...` | 5 个有测试的包 | 0 | 0 | 全包通过；另一次 `go test -count=1 -json ./...` 统计 60 个 pass 事件，含顶层与子测试，不重复相加 |
+| `go vet ./...`、本次 Go 文件 `gofmt -l` | 2 | 0 | 0 | 无诊断或待格式化文件 |
+| `git diff --check` | 1 | 0 | 0 | 无空白错误；PowerShell 显示 Plan.md 的 CRLF 将被 Git 归一化提示 |
+| 隔离目录导入 `docs/` | 12 份文档 | 0 | 0 | 全部建索引 |
+| 同目录 `eval/queries.json` 演示评测 | 21 条查询 | 0 | 0 | 21/21；Hit@5 18/18、来源可核验 18/18、拒答 3/3；此指标不证明语义充分性 |
+
+**最终复测：**指针聚焦用例通过；Go 全包和演示集通过。BUG-10 未由本任务解决；交付验证分支的 H13 保留失败不计入本分支测试成绩。

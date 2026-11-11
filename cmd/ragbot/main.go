@@ -156,15 +156,24 @@ func doIngest(st *store.Store, ret *retriever.Retriever, dir string) {
 }
 
 func printReport(rep *evaluate.Report) {
-	fmt.Printf("评测结果：%d/%d 通过 | Hit@5=%.2f | 有出处=%.2f | 拒答=%v | 平均耗时=%.1fms\n",
-		rep.Passed, rep.Total, rep.Hit5Rate, rep.CitedRate, rep.RefusalOK, rep.AvgLatencyMs)
+	fmt.Printf("评测结果：%d/%d 通过 | Hit@5=%d/%d (%.2f) | 有出处=%d/%d (%.2f) | 来源可核验=%d/%d (%.2f) | 拒答=%d/%d (%.2f) | 回答平均耗时=%.3fms\n",
+		rep.Passed, rep.Total,
+		rep.Hit5Passed, rep.Hit5Total, rep.Hit5Rate,
+		rep.CitedPassed, rep.CitedTotal, rep.CitedRate,
+		rep.SourcePassed, rep.SourceTotal, rep.SourceRate,
+		rep.RefusalPassed, rep.RefusalTotal, rep.RefusalRate, rep.AvgLatencyMs)
 	for _, r := range rep.Records {
 		mark := "✓"
 		if !r.Pass {
 			mark = "✗"
 		}
-		fmt.Printf("  %s %-4s %-22s hit5=%-5v cited=%-5v %dms  %s\n",
-			mark, r.ID, r.Status, r.Hit5, r.Cited, r.LatencyMs, r.Query)
+		if r.ExpectedStatus == "insufficient_evidence" {
+			fmt.Printf("  %s %-4s %-22s refusal=%-5v %.3fms  %s\n",
+				mark, r.ID, r.Status, r.Refusal, r.LatencyMs, r.Query)
+			continue
+		}
+		fmt.Printf("  %s %-4s %-22s hit5=%-5v cited=%-5v source=%-5v located=%-5v %.3fms  %s\n",
+			mark, r.ID, r.Status, r.Hit5, r.Cited, r.SourceCoverage, r.CitationsLocated, r.LatencyMs, r.Query)
 	}
 }
 

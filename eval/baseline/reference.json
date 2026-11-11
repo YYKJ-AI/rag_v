@@ -1,0 +1,469 @@
+{
+  "generated_at": "2026-11-11T10:53:21+08:00",
+  "total": 14,
+  "passed": 14,
+  "hit5_passed": 13,
+  "hit5_total": 13,
+  "hit5_rate": 1,
+  "cited_passed": 13,
+  "cited_total": 13,
+  "cited_rate": 1,
+  "source_passed": 13,
+  "source_total": 13,
+  "source_rate": 1,
+  "refusal_passed": 1,
+  "refusal_total": 1,
+  "refusal_rate": 1,
+  "refusal_ok": true,
+  "avg_latency_ms": 0.22410714285714287,
+  "records": [
+    {
+      "id": "Q01",
+      "query": "申请社区艺术节需要满足什么条件",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "art-guide",
+          "version": "v1",
+          "location": "第2节 申请条件",
+          "excerpt": "申请人须为年满十八周岁的社区居民，或在街道登记注册的社会组织。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件（修订）",
+          "excerpt": "申请人条件不变。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.345675
+    },
+    {
+      "id": "Q02",
+      "query": "报名艺术节有什么资格要求",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "qa-history",
+          "version": "v1",
+          "location": "第4节 关于保险",
+          "excerpt": "答：二〇二五年度无强制保险要求。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件（修订）",
+          "excerpt": "所有材料须加盖申请方公章。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.220015
+    },
+    {
+      "id": "Q03",
+      "query": "提交材料要盖什么章",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v1",
+          "location": "第2节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案及场地使用说明三项材料。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件（修订）",
+          "excerpt": "提交材料由三项调整为四项：活动方案、安全预案、场地使用说明及公众责任保险投保证明。"
+        },
+        {
+          "document_id": "funding-2026-cul",
+          "version": "v1",
+          "location": "第3节 申请方式",
+          "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.204289
+    },
+    {
+      "id": "Q04",
+      "query": "现在申请要交哪些材料",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v1",
+          "location": "第2节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案及场地使用说明三项材料。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件（修订）",
+          "excerpt": "提交材料由三项调整为四项：活动方案、安全预案、场地使用说明及公众责任保险投保证明。"
+        },
+        {
+          "document_id": "funding-2026-cul",
+          "version": "v1",
+          "location": "第3节 申请方式",
+          "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+        },
+        {
+          "document_id": "qa-history",
+          "version": "v1",
+          "location": "第2节 关于申请材料",
+          "excerpt": "答：按当年申请指南提交活动方案、安全预案及场地使用说明三项材料。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.211346
+    },
+    {
+      "id": "Q05",
+      "query": "初审需要多少个工作日",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "art-guide",
+          "version": "v1",
+          "location": "第4节 审批流程",
+          "excerpt": "街道办事处在收到完整材料后十个工作日内完成初审，初审通过后进入公示期。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第5节 审批流程（修订）",
+          "excerpt": "初审时限由十个工作日压缩至七个工作日。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "qa-history",
+          "version": "v1",
+          "location": "第3节 关于审批时限",
+          "excerpt": "答：二〇二五年度按十个工作日执行。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.253487
+    },
+    {
+      "id": "Q06",
+      "query": "在中央广场办活动还要办什么手续",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第4节 保证金",
+          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.227701
+    },
+    {
+      "id": "Q07",
+      "query": "中央广场舞台区要交哪些费用",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第4节 保证金",
+          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "fee-standard",
+          "version": "v1",
+          "location": "第3节 中央广场收费",
+          "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.258406
+    },
+    {
+      "id": "Q08",
+      "query": "经营性活动用中央广场舞台一天多少钱",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "fee-standard",
+          "version": "v1",
+          "location": "第3节 中央广场收费",
+          "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第4节 保证金",
+          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "fee-standard",
+          "version": "v1",
+          "location": "第2节 收费原则",
+          "excerpt": "社区公共活动场地对非经营性公益活动免收场租费用。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.251332
+    },
+    {
+      "id": "Q09",
+      "query": "2025年申请艺术节要准备几项材料",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "qa-history",
+          "version": "v1",
+          "location": "第2节 关于申请材料",
+          "excerpt": "答：按当年申请指南提交活动方案、安全预案及场地使用说明三项材料。"
+        },
+        {
+          "document_id": "qa-history",
+          "version": "v1",
+          "location": "第4节 关于保险",
+          "excerpt": "相关要求以最新指南为准。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.131439
+    },
+    {
+      "id": "Q10",
+      "query": "艺术节专项经费最多能补多少钱",
+      "expected_status": "conflict",
+      "status": "conflict",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "funding-2026-cul",
+          "version": "v1",
+          "location": "第2节 补助标准",
+          "excerpt": "经批准的艺术节活动，单项补助金额上限为五千元。"
+        },
+        {
+          "document_id": "funding-2026-fin",
+          "version": "v1",
+          "location": "第2节 补助标准",
+          "excerpt": "经批准的艺术节活动，单项补助金额上限为八千元。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.250915
+    },
+    {
+      "id": "Q11",
+      "query": "消防培训多久组织一次",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "fire-training",
+          "version": "v1",
+          "location": "第2节 培训频次",
+          "excerpt": "各社区每半年组织一次消防安全培训，全年不少于两次。"
+        },
+        {
+          "document_id": "fire-training",
+          "version": "v1",
+          "location": "第3节 参加人员",
+          "excerpt": "楼栋长及物业安全员须全员参加，居民自愿报名。"
+        },
+        {
+          "document_id": "fire-training",
+          "version": "v1",
+          "location": "第4节 经费来源",
+          "excerpt": "培训经费从物业专项维修资金列支，不得向参加居民收费。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.167851
+    },
+    {
+      "id": "Q12",
+      "query": "艺术节可以带宠物入场吗",
+      "expected_status": "insufficient_evidence",
+      "status": "insufficient_evidence",
+      "hit5": false,
+      "cited": false,
+      "source_coverage": false,
+      "citations_located": false,
+      "refusal": true,
+      "pass": true,
+      "latency_ms": 0.180301
+    },
+    {
+      "id": "Q13",
+      "query": "场地保证金什么时候退还",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第4节 保证金",
+          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
+        },
+        {
+          "document_id": "fee-standard",
+          "version": "v1",
+          "location": "第3节 中央广场收费",
+          "excerpt": "非经营性活动免收场租，但须按补充通知缴纳场地保证金。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.2279
+    },
+    {
+      "id": "Q14",
+      "query": "补交材料的方式有哪些",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "funding-2026-cul",
+          "version": "v1",
+          "location": "第3节 申请方式",
+          "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v1",
+          "location": "第2节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案及场地使用说明三项材料。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件（修订）",
+          "excerpt": "提交材料由三项调整为四项：活动方案、安全预案、场地使用说明及公众责任保险投保证明。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.206843
+    }
+  ]
+}

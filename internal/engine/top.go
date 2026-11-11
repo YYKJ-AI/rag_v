@@ -1,9 +1,23 @@
-// Package engine 导出 Top 供评测 Hit@5 判定（与 Answer 共用同一检索路径）。
+// Package engine 导出 Top 供评测 Hit@5 判定（与 Answer 共用业务时间筛选）。
 package engine
 
-import "ragbot/internal/types"
+import (
+	"time"
 
-// Top 检索 topN（评测 Hit@5 用，确定性同 Answer 内部路径）
+	"ragbot/internal/types"
+)
+
+// Top returns the first eligible parent hits for the query's business date.
 func (e *Engine) Top(query string, n int) []types.Hit {
-	return e.R.Search(query, n)
+	asOf := inferQueryTime(query)
+	if asOf == nil {
+		now := time.Now()
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		asOf = &today
+	}
+	hits := e.filterByAsOf(e.R.Search(query, 0), asOf, "")
+	if n > 0 && len(hits) > n {
+		return hits[:n]
+	}
+	return hits
 }

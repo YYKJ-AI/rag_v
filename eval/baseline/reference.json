@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-11-11T11:22:10+08:00",
-  "total": 14,
-  "passed": 14,
-  "hit5_passed": 13,
-  "hit5_total": 13,
+  "generated_at": "2026-11-11T11:59:59+08:00",
+  "total": 21,
+  "passed": 21,
+  "hit5_passed": 18,
+  "hit5_total": 18,
   "hit5_rate": 1,
-  "cited_passed": 13,
-  "cited_total": 13,
+  "cited_passed": 18,
+  "cited_total": 18,
   "cited_rate": 1,
-  "source_passed": 13,
-  "source_total": 13,
+  "source_passed": 18,
+  "source_total": 18,
   "source_rate": 1,
-  "refusal_passed": 1,
-  "refusal_total": 1,
+  "refusal_passed": 3,
+  "refusal_total": 3,
   "refusal_rate": 1,
   "refusal_ok": true,
-  "avg_latency_ms": 0.2393832857142857,
+  "avg_latency_ms": 0.3371520952380953,
   "records": [
     {
       "id": "Q01",
@@ -36,19 +36,13 @@
         {
           "document_id": "art-guide",
           "version": "v2",
-          "location": "第4节 申请时间与方式",
-          "excerpt": "申请须于活动开始前二十五个工作日提交至街道办事处文化服务窗口。"
-        },
-        {
-          "document_id": "art-guide",
-          "version": "v2",
-          "location": "第2节 施行说明",
-          "excerpt": "本整合修订版完整替代 2025 年版申请指南，自二〇二六年二月一日起施行。"
+          "location": "第5节 补交材料",
+          "excerpt": "申请人补交材料可通过社区服务平台线上提交，或在工作日九时至十七时到文化服务窗口线下提交。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.310032
+      "latency_ms": 0.413709
     },
     {
       "id": "Q02",
@@ -64,18 +58,12 @@
           "document_id": "art-guide",
           "version": "v2",
           "location": "第3节 申请条件",
-          "excerpt": "所有材料须加盖申请方公章。"
-        },
-        {
-          "document_id": "venue-notice",
-          "version": "v1",
-          "location": "第2节 场地报备要求",
-          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
+          "excerpt": "申请人须为年满十八周岁的社区居民，或在街道登记注册的社会组织。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.195659
+      "latency_ms": 0.215784
     },
     {
       "id": "Q03",
@@ -96,8 +84,14 @@
         {
           "document_id": "art-guide",
           "version": "v2",
+          "location": "第5节 补交材料",
+          "excerpt": "申请人补交材料可通过社区服务平台线上提交，或在工作日九时至十七时到文化服务窗口线下提交。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
           "location": "第3节 申请条件",
-          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
+          "excerpt": "所有材料须加盖申请方公章。"
         },
         {
           "document_id": "funding-2026-cul",
@@ -108,7 +102,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.204781
+      "latency_ms": 0.256031
     },
     {
       "id": "Q04",
@@ -129,25 +123,31 @@
         {
           "document_id": "art-guide",
           "version": "v2",
-          "location": "第3节 申请条件",
-          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
+          "location": "第5节 补交材料",
+          "excerpt": "申请人补交材料可通过社区服务平台线上提交，或在工作日九时至十七时到文化服务窗口线下提交。"
         },
         {
           "document_id": "art-guide",
           "version": "v2",
-          "location": "第5节 审批流程",
-          "excerpt": "街道办事处在收到完整材料后七个工作日内完成初审，初审通过后进入公示期。"
+          "location": "第3节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
         },
         {
           "document_id": "funding-2026-cul",
           "version": "v1",
           "location": "第3节 申请方式",
           "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第6节 审批流程",
+          "excerpt": "街道办事处在收到完整材料后七个工作日内完成初审，初审通过后进入公示期。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.236829
+      "latency_ms": 0.350521
     },
     {
       "id": "Q05",
@@ -162,7 +162,7 @@
         {
           "document_id": "art-guide",
           "version": "v2",
-          "location": "第5节 审批流程",
+          "location": "第6节 审批流程",
           "excerpt": "街道办事处在收到完整材料后七个工作日内完成初审，初审通过后进入公示期。"
         },
         {
@@ -170,29 +170,11 @@
           "version": "v1",
           "location": "第2节 场地报备要求",
           "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
-        },
-        {
-          "document_id": "art-guide",
-          "version": "v2",
-          "location": "第4节 申请时间与方式",
-          "excerpt": "申请须于活动开始前二十五个工作日提交至街道办事处文化服务窗口。"
-        },
-        {
-          "document_id": "fire-training",
-          "version": "v1",
-          "location": "第3节 参加人员",
-          "excerpt": "参加人员名单须在培训前三个工作日报社区居委会备案。"
-        },
-        {
-          "document_id": "venue-notice",
-          "version": "v1",
-          "location": "第4节 保证金",
-          "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.208023
+      "latency_ms": 0.284456
     },
     {
       "id": "Q06",
@@ -219,7 +201,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.248084
+      "latency_ms": 0.448035
     },
     {
       "id": "Q07",
@@ -238,21 +220,21 @@
           "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
         },
         {
-          "document_id": "venue-notice",
-          "version": "v1",
-          "location": "第2节 场地报备要求",
-          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
-        },
-        {
           "document_id": "fee-standard",
           "version": "v1",
           "location": "第3节 中央广场收费",
           "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
+        },
+        {
+          "document_id": "venue-notice",
+          "version": "v1",
+          "location": "第2节 场地报备要求",
+          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.258106
+      "latency_ms": 0.385681
     },
     {
       "id": "Q08",
@@ -265,33 +247,21 @@
       "citations_located": true,
       "citations": [
         {
-          "document_id": "fee-standard",
-          "version": "v1",
-          "location": "第3节 中央广场收费",
-          "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
-        },
-        {
           "document_id": "venue-notice",
           "version": "v1",
           "location": "第4节 保证金",
           "excerpt": "使用中央广场舞台区域的，须缴纳场地保证金两千元，活动结束且场地验收合格后十个工作日内无息退还。"
         },
         {
-          "document_id": "venue-notice",
-          "version": "v1",
-          "location": "第2节 场地报备要求",
-          "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
-        },
-        {
           "document_id": "fee-standard",
           "version": "v1",
-          "location": "第2节 收费原则",
-          "excerpt": "社区公共活动场地对非经营性公益活动免收场租费用。"
+          "location": "第3节 中央广场收费",
+          "excerpt": "中央广场舞台区域对经营性活动按每日三千元收取场租。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.244089
+      "latency_ms": 0.49327
     },
     {
       "id": "Q09",
@@ -304,12 +274,6 @@
       "citations_located": true,
       "citations": [
         {
-          "document_id": "art-guide",
-          "version": "v1",
-          "location": "第2节 申请条件",
-          "excerpt": "申请方须提交活动方案、安全预案及场地使用说明三项材料。"
-        },
-        {
           "document_id": "qa-history",
           "version": "v1",
           "location": "第2节 关于申请材料",
@@ -318,13 +282,13 @@
         {
           "document_id": "art-guide",
           "version": "v1",
-          "location": "第4节 审批流程",
-          "excerpt": "街道办事处在收到完整材料后十个工作日内完成初审，初审通过后进入公示期。"
+          "location": "第2节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案及场地使用说明三项材料。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.36287
+      "latency_ms": 0.555012
     },
     {
       "id": "Q10",
@@ -351,7 +315,7 @@
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.24131
+      "latency_ms": 0.365062
     },
     {
       "id": "Q11",
@@ -368,23 +332,11 @@
           "version": "v1",
           "location": "第2节 培训频次",
           "excerpt": "各社区每半年组织一次消防安全培训，全年不少于两次。"
-        },
-        {
-          "document_id": "fire-training",
-          "version": "v1",
-          "location": "第3节 参加人员",
-          "excerpt": "楼栋长及物业安全员须全员参加，居民自愿报名。"
-        },
-        {
-          "document_id": "fire-training",
-          "version": "v1",
-          "location": "第4节 经费来源",
-          "excerpt": "培训经费从物业专项维修资金列支，不得向参加居民收费。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.172614
+      "latency_ms": 0.237392
     },
     {
       "id": "Q12",
@@ -397,7 +349,7 @@
       "citations_located": false,
       "refusal": true,
       "pass": true,
-      "latency_ms": 0.214835
+      "latency_ms": 0.237565
     },
     {
       "id": "Q13",
@@ -420,11 +372,17 @@
           "version": "v1",
           "location": "第3节 中央广场收费",
           "excerpt": "非经营性活动免收场租，但须按补充通知缴纳场地保证金。"
+        },
+        {
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第3节 申请条件",
+          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.21935
+      "latency_ms": 0.321151
     },
     {
       "id": "Q14",
@@ -437,10 +395,10 @@
       "citations_located": true,
       "citations": [
         {
-          "document_id": "funding-2026-cul",
-          "version": "v1",
-          "location": "第3节 申请方式",
-          "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+          "document_id": "art-guide",
+          "version": "v2",
+          "location": "第5节 补交材料",
+          "excerpt": "申请人补交材料可通过社区服务平台线上提交，或在工作日九时至十七时到文化服务窗口线下提交。"
         },
         {
           "document_id": "venue-notice",
@@ -449,21 +407,158 @@
           "excerpt": "在中央广场举办聚集性活动的，除按申请指南提交材料外，还须提前五个工作日向广场管理站报备活动规模与设备清单。"
         },
         {
+          "document_id": "funding-2026-cul",
+          "version": "v1",
+          "location": "第3节 申请方式",
+          "excerpt": "补助申请随活动申请材料一并提交，由文化站统一受理。"
+        },
+        {
           "document_id": "art-guide",
           "version": "v2",
           "location": "第3节 申请条件",
-          "excerpt": "申请方须提交活动方案、安全预案、场地使用说明及公众责任保险投保证明四项材料。"
-        },
-        {
-          "document_id": "funding-2026-fin",
-          "version": "v1",
-          "location": "第3节 申请方式",
-          "excerpt": "补助申请于活动批准后单独提交，由财政所统一受理。"
+          "excerpt": "所有材料须加盖申请方公章。"
         }
       ],
       "refusal": false,
       "pass": true,
-      "latency_ms": 0.234784
+      "latency_ms": 0.33082
+    },
+    {
+      "id": "Q15",
+      "query": "星河工作坊在哪里举办",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "workshop-plan",
+          "version": "v1",
+          "location": "第2节 项目安排",
+          "excerpt": "星河工作坊计划于二〇二六年六月二十日在社区创作室举办，面向年满十二周岁的社区居民。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.182428
+    },
+    {
+      "id": "Q16",
+      "query": "星河工作坊的活动主题是什么",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "workshop-intro",
+          "version": "v1",
+          "location": "第2节 活动主题",
+          "excerpt": "星河工作坊以夜空色彩为主题，安排儿童绘画和作品展示。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.245818
+    },
+    {
+      "id": "Q17",
+      "query": "报名星河工作坊第二步需要上传什么",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "workshop-process",
+          "version": "v1",
+          "location": "第2节 报名步骤",
+          "excerpt": "第二步：上传监护人同意书"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.352654
+    },
+    {
+      "id": "Q18",
+      "query": "星光画笔的单价是多少元",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "workshop-budget",
+          "version": "v1",
+          "location": "第2节 物料清单",
+          "excerpt": "| 星光画笔 | 10 套 | 30 元 |"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.238196
+    },
+    {
+      "id": "Q19",
+      "query": "报名星河工作坊要上传什么，入场券在哪里领取",
+      "expected_status": "answered",
+      "status": "answered",
+      "hit5": true,
+      "cited": true,
+      "source_coverage": true,
+      "citations_located": true,
+      "citations": [
+        {
+          "document_id": "workshop-process",
+          "version": "v1",
+          "location": "第2节 报名步骤",
+          "excerpt": "第二步：上传监护人同意书"
+        },
+        {
+          "document_id": "workshop-plan",
+          "version": "v1",
+          "location": "第3节 入场券领取",
+          "excerpt": "获批报名者在社区文化服务窗口领取纸质入场券。"
+        }
+      ],
+      "refusal": false,
+      "pass": true,
+      "latency_ms": 0.451746
+    },
+    {
+      "id": "Q20",
+      "query": "星图纸和星光画笔合计多少钱",
+      "expected_status": "insufficient_evidence",
+      "status": "insufficient_evidence",
+      "hit5": false,
+      "cited": false,
+      "source_coverage": false,
+      "citations_located": false,
+      "refusal": true,
+      "pass": true,
+      "latency_ms": 0.253215
+    },
+    {
+      "id": "Q21",
+      "query": "能否推断星河工作坊的孩子会提高多少创造力",
+      "expected_status": "insufficient_evidence",
+      "status": "insufficient_evidence",
+      "hit5": false,
+      "cited": false,
+      "source_coverage": false,
+      "citations_located": false,
+      "refusal": true,
+      "pass": true,
+      "latency_ms": 0.461648
     }
   ]
 }

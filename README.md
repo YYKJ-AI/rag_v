@@ -12,7 +12,7 @@
 ```bash
 go build -o ragbot.exe ./cmd/ragbot
 
-# 导入虚构演示资料（docs/ 内 8 份互相关联文档）
+# 导入虚构演示资料（docs/ 内 12 份互相关联文档）
 ./ragbot.exe ingest docs
 
 # 提问（带出处）
@@ -24,7 +24,7 @@ go build -o ragbot.exe ./cmd/ragbot
 # 按文档声明的适用范围提问；没有该范围依据时拒答
 ./ragbot.exe -scope-key resident ask "申请要提交哪些材料"
 
-# 运行评测（14 条标注查询）
+# 运行评测（21 条标注查询）
 ./ragbot.exe evaluate
 ```
 
@@ -37,7 +37,7 @@ go build -o ragbot.exe ./cmd/ragbot
              → 块级 SimHash 去重 → 内存 BM25 倒排（JSON 落盘）
 检索 ask：  同义词展开 → 真实子块 BM25（标题/节路径加权）→ 父块最高分聚合 → 按业务日期与适用范围筛选
 回答：      证据句对齐抽取 → 冲突三段式（时间窗/替代关系/标注人工）→ 模板组装
-评测：      14 条标注查询 → Hit@5 / 有出处比例 / 来源核验 / 拒答正确率 / 回答耗时
+评测：      21 条标注查询 → Hit@5 / 有出处比例 / 来源核验 / 拒答正确率 / 回答耗时
 ```
 
 ### 设计决策
@@ -58,14 +58,15 @@ go build -o ragbot.exe ./cmd/ragbot
 - 冲突检测针对"同节路径+数值差异+高互含"的数值型冲突，语义级冲突（无数值）不检测；
 - 时间点查询用 front-matter 业务日期（effective_date/valid_until/replaces）推演，不做双时间轴；未指定范围时不推断用户身份或地区；
 - 存储默认 JSON 落盘（data/store.json），PG/pgvector 适配器见 `assets`/migrations（演化位）；
-- 评测集 14 条，dev/holdout 未分离（P1 改进项）。
+- 评测集 21 条，dev/holdout 未分离（后续交付验证任务）。
 - 演示资料多数父块只有一个子块；长文、流程和表格的多子块召回由专门测试覆盖，尚无独立大规模检索基准。
+- 离线规则可按行引用流程和表格，直接摘录与双来源问题有测试；无显式总额时拒绝自行计算，对预测/推断类提问保守拒答。启发式对齐仍可能附带不相关引用：例如 Q03 的盖章回答混入场地报备、Q08 的每日场租回答混入保证金、Q14 的补交方式回答混入补助申请。来源可定位不代表语义充分；这些输出需要人工核查。
 
 ## 评测（基线：docs/ 全量语料）
 
 ```
-评测结果：14/14 通过 | Hit@5=13/13 | 有出处=13/13 | 来源可核验=13/13 | 拒答=1/1
-回答平均耗时≈0.24ms（2026-11-11 Windows 隔离复跑，具体耗时随机器变化）
+评测结果：21/21 通过 | Hit@5=18/18 | 有出处=18/18 | 来源可核验=18/18 | 拒答=3/3
+回答平均耗时≈0.34ms（2026-11-11 Windows 隔离复跑，具体耗时随机器变化）
 ```
 
 逐条引用、来源版本和耗时快照见 `eval/baseline/reference.json`。复现时运行：
@@ -75,7 +76,7 @@ go run ./cmd/ragbot -data /tmp/ragbot-eval-data ingest docs
 go run ./cmd/ragbot -data /tmp/ragbot-eval-data -baseline /tmp/ragbot-eval-report.json evaluate
 ```
 
-上述 14 条是演示资料上的开发评测，尚无独立保留集。Hit@5 的分母是 13 条有答案案例，每条要求全部 `expect_docs` 均进入前五；有出处率是这 13 条中至少有一条引用的比例。来源可核验率要求所有标注的文档与版本均被引用，且每条引用摘录可在对应检索父块的原文中定位。拒答率的分母是 1 条标注拒答案例，正确拒答要求状态为 `insufficient_evidence` 且没有引用。通过数按逐条 `pass` 汇总；有答案案例必须同时满足状态、Hit@5、来源覆盖及摘录定位。
+上述 21 条是演示资料上的开发评测，尚无独立保留集。Hit@5 的分母是 18 条有答案案例，每条要求全部 `expect_docs` 均进入按业务时间筛选后的前五；有出处率是这 18 条中至少有一条引用的比例。来源可核验率要求所有标注的文档与版本均被引用，且每条引用摘录可在对应检索父块的原文中定位。拒答率的分母是 3 条标注拒答案例，正确拒答要求状态为 `insufficient_evidence` 且没有引用。通过数按逐条 `pass` 汇总；有答案案例必须同时满足状态、Hit@5、来源覆盖及摘录定位。
 
 耗时仅测 `Answer` 调用，每题连续运行 64 次并取单次均值，不含检索指标和引用核验。来源可核验只检查来源完整性和逐字定位，**不等于语义事实正确**；真实业务答案仍需人工核查。快照耗时和生成时间会随环境变化。
 
@@ -104,12 +105,12 @@ cmd/ragbot/       CLI 入口（ingest / ask / search / evaluate）
 internal/
   ingest/         解析、打标、分块、指纹
   store/          内存 + JSON 落盘（PG 适配器预留）
-  retriever/      BM25 倒排、父块聚合、版本降权
+  retriever/      真实子块 BM25 倒排与父块聚合
   engine/         证据抽取、冲突三段式、模板回答、as-of
   evaluate/       评测链路
   tokenize/       中文分词（bigram+unigram）与同义词表
   simhash/        64 位 SimHash（纯标准库）
-docs/             虚构演示语料（8 份互相关联文档，均为虚构）
+docs/             虚构演示语料（12 份互相关联文档，均为虚构）
 eval/             评测查询集与基线
 migrations/       PG schema（演化位）
 ```

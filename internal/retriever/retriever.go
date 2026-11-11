@@ -116,6 +116,15 @@ func (r *Retriever) Search(query string, n int) []types.Hit {
 // Docs 供引擎做版本裁决
 func (r *Retriever) Docs() []*types.Document { return r.docs }
 
+// Section returns the exact stored parent block for a parsed pointer target.
+func (r *Retriever) Section(id string) (types.Section, bool) {
+	section := r.secs[id]
+	if section == nil {
+		return types.Section{}, false
+	}
+	return *section, true
+}
+
 func (r *Retriever) docOf(s *types.Section) *types.Document {
 	for _, d := range r.docs {
 		if d.ID == s.DocID && d.Version == s.Version {

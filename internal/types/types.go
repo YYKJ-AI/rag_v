@@ -4,6 +4,26 @@ package types
 
 import "time"
 
+// RelationType identifies an explicit cross-section evidence relationship.
+// V1 intentionally implements only references and inherits.
+type RelationType string
+
+const (
+	RelationReferences RelationType = "references"
+	RelationInherits   RelationType = "inherits"
+)
+
+// Relation records a parsed pointer without copying the target text into the source.
+type Relation struct {
+	SourceChunkID   string       `json:"source_chunk_id"`
+	TargetDocID     string       `json:"target_doc_id"`
+	TargetVersion   string       `json:"target_version"`
+	TargetSectionID string       `json:"target_section_id"`
+	Type            RelationType `json:"type"`
+	Status          string       `json:"status"` // parsed | unresolved
+	RawPointer      string       `json:"raw_pointer"`
+}
+
 // Document 文档级打标（对应 front-matter）
 type Document struct {
 	ID            string    `json:"id"`      // 稳定 document_id
@@ -37,12 +57,14 @@ type Section struct {
 
 // Chunk 子块：检索的最小单位
 type Chunk struct {
-	ID        string   `json:"id"`
-	SectionID string   `json:"section_id"`
-	Text      string   `json:"text"`
-	Tokens    []string `json:"tokens"`
-	Hash      string   `json:"hash"`    // sha256，精确复用判据
-	SimHash   uint64   `json:"simhash"` // 近重复去重
+	ID        string     `json:"id"`
+	SectionID string     `json:"section_id"`
+	Text      string     `json:"text"`
+	Tokens    []string   `json:"tokens"`
+	Hash      string     `json:"hash"`           // sha256，精确复用判据
+	SimHash   uint64     `json:"simhash"`        // 近重复去重
+	Kind      string     `json:"kind,omitempty"` // factual | pointer
+	Relations []Relation `json:"relations,omitempty"`
 	// embedding 相关字段预留（向量路径未启用时为空）
 	EmbeddingModel   string `json:"embedding_model,omitempty"`
 	EmbeddingVersion string `json:"embedding_version,omitempty"`
@@ -59,8 +81,9 @@ type Hit struct {
 type Citation struct {
 	DocumentID string `json:"document_id"`
 	Version    string `json:"version"`
-	Location   string `json:"location"` // "第2节/第3段"
-	Excerpt    string `json:"excerpt"`  // 逐字来自父块，防拼接失真
+	Location   string `json:"location"`       // "第2节/第3段"
+	Excerpt    string `json:"excerpt"`        // 逐字来自父块，防拼接失真
+	Role       string `json:"role,omitempty"` // current_pointer | inherited_clause
 }
 
 // Answer 统一返回结构（任务书规定的形态）

@@ -196,3 +196,15 @@
 **后续浏览器实测：**在 Codex 用户配置注册官方 Playwright MCP（`@playwright/mcp` 0.0.85，`--browser msedge --headless --isolated`）。MCP 实际启动并返回浏览器工具；用单个受控进程在本机 `:18081` 提供页面，Playwright 打开首页并点击三个示例：正常回答显示“已回答”和 4 条来源、冲突显示“存在冲突”、拒答显示“证据不足”及 0 条来源，3/3 通过。分别生成并人工查看 1280px 桌面与 390px 移动全页截图，2/2 通过；截图位于忽略的 `data/evidence-ui-desktop.png`、`data/evidence-ui-mobile.png`。浏览器控制测试结束后关闭页面与服务。首次 MCP 尝试撞到仍被占用的 `:18080`，切换独立端口后成功；该尝试不计为 UI 用例失败。
 
 **最终结果：**JS 语法、Go/API 聚焦测试、HTTP 联通、三种页面状态和两种视口均通过。指针双来源的角色映射在代码中可见，Go 指针测试已覆盖证据数据；本次浏览器示例未构造该专用指针语料，不声称浏览器端双来源实测通过。
+
+## 2026-11-11：GitHub 主分支状态文档核验
+
+**分支：**`docs/sync-main-github-status`。**环境：**Windows PowerShell；纯文档任务，无业务数据改动。
+
+| 实际执行 | 通过 | 失败 | 跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| `git ls-remote origin refs/heads/main` 与本地 `git log -1` 核对 | 1 | 0 | 0 | GitHub 远端与本地 `main` 同为 `d0ad5cb5496a89bd680b5b433f123becdfe8d6d4`；首次沙箱内 SSH 被拒，获准在沙箱外读取后成功 |
+| `git status --short --branch`、`git diff` 检查分支及修改范围 | 2 | 0 | 0 | 修改仅在文档任务分支，工作基线为非 `main` 的 `work/ragbot` |
+| 核对 `Plan.md`、`issues.md`、`bug.md`、README、`eval/RESULTS.md` 的当前状态与历史记录 | 1 组 | 0 | 0 | 旧“main 未合并”为历史状态；当前 `main` 已推送，H13/BUG-12 与 BUG-10 仍开放 |
+| `git diff --check` | 1 | 0 | 0 | 无空白错误 |
+| Go 单测、CLI 评测 | 0 | 0 | 2 类未运行 | 本次只改工作记录；沿用先前业务与前端任务的实测结果，不冒充新测试 |

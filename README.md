@@ -12,7 +12,7 @@
 
 需要 Go 1.22+；默认数据写入 `data/store.json`，无需 Python、模型或 API 密钥。首次使用建议指定全新数据目录，避免旧演示索引残留。
 
-后续模型接入的配置样例见 [`.env.example`](.env.example)；本机值写入被 Git 忽略的 `.env`。其中 `RAGBOT_GENERATOR_*` 为云端生成模型预留：`PROVIDER=openai_compatible` 表示拟采用的兼容协议，`BASE_URL`、`MODEL` 和 `API_KEY` 要按实际服务商填写，`TIMEOUT_SECONDS` 是拟采用的请求超时（秒）。当前 CLI 尚不读取 `.env` 或其中的模型变量，也不会发起云端请求；`ENABLED=false` 应保持到调用链路和失败回退完成验证后。
+后续模型接入的配置样例见 [`.env.example`](.env.example)；本机值写入被 Git 忽略的 `.env`。Embedding、Reranker 均预留本地 `MODEL_DIR`，也预留云端 `ENDPOINT_URL`（完整请求地址）、`MODEL`、`API_KEY` 与 `TIMEOUT_SECONDS`；未来选择云端时使用 `PROVIDER=remote_http`。两类接口的请求和响应格式须按实际服务商分别适配，不能仅凭填入地址就启用。Generator 预留 `PROVIDER=openai_compatible`、`BASE_URL`、`MODEL`、`API_KEY` 和超时。当前 CLI 尚不读取 `.env` 或其中的模型变量，也不会发起云端请求；三个 `ENABLED` 均应保持 `false`，直到对应链路和失败回退验证完成。
 
 ```bash
 go run ./cmd/ragbot -data data/demo ingest docs

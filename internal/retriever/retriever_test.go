@@ -31,6 +31,12 @@ func TestSearchVerifiedIgnoresReviewCorpusStatistics(t *testing.T) {
 	if hits := mixed.Search("身份证明", 5); len(hits) != 2 {
 		t.Errorf("Search(身份证明) mixed hits = %d, want 2 including review document", len(hits))
 	}
+	if hit, ok := mixed.VerifiedChunkHit(chunk.ID); !ok || hit.Section.ID != section.ID {
+		t.Errorf("VerifiedChunkHit(%q) = %+v, %t, want certified section %q", chunk.ID, hit, ok, section.ID)
+	}
+	if hit, ok := mixed.VerifiedChunkHit(reviewChunk.ID); ok {
+		t.Errorf("VerifiedChunkHit(%q) = %+v, %t, want rejected review-only chunk", reviewChunk.ID, hit, ok)
+	}
 }
 
 func TestSearchUsesIngestedChunksForLongProcessAndTable(t *testing.T) {

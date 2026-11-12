@@ -80,3 +80,77 @@ func TestScoreRejectsWrongVersionAndUnlocatedExcerpt(t *testing.T) {
 		})
 	}
 }
+
+func TestScoreDistinguishesLocatedFromSupportingCitations(t *testing.T) {
+	tc := TestCase{
+		ID: "evidence", ExpectDocs: []string{"guide"}, ExpectState: "answered",
+		ExpectEvidence: []Evidence{
+			{DocumentID: "guide", Version: "v1", Location: "费用", ExcerptContains: "报名不收费"},
+			{DocumentID: "guide", Version: "v1", Location: "材料", ExcerptContains: "提交申请表"},
+		},
+	}
+	hits := []types.Hit{
+		{Section: types.Section{DocID: "guide", Version: "v1", SectionPath: "费用", Text: "报名不收费。"}},
+		{Section: types.Section{DocID: "guide", Version: "v1", SectionPath: "材料", Text: "提交申请表。"}},
+		{Section: types.Section{DocID: "guide", Version: "v1", SectionPath: "时间", Text: "活动前三天预约。"}},
+	}
+	fee := types.Citation{DocumentID: "guide", Version: "v1", Location: "费用", Excerpt: "报名不收费。"}
+	material := types.Citation{DocumentID: "guide", Version: "v1", Location: "材料", Excerpt: "提交申请表。"}
+	noise := types.Citation{DocumentID: "guide", Version: "v1", Location: "时间", Excerpt: "活动前三天预约。"}
+
+	partial := score(tc, types.Answer{Status: "answered", Citations: []types.Citation{fee, noise}}, hits, hits, time.Millisecond)
+	if !partial.CitationsLocated || !partial.SourceCoverage || partial.EvidenceCoverage || partial.SupportedCitations != 1 || partial.ScoredCitations != 2 || len(partial.UnsupportedCitations) != 1 || len(partial.MissingEvidence) != 1 || partial.Pass {
+		t.Errorf("score(evidence, fee and noise) = %+v, want located sources but missing evidence, one unsupported citation, and pass=false", partial)
+	}
+
+	complete := score(tc, types.Answer{Status: "answered", Citations: []types.Citation{fee, material}}, hits, hits, time.Millisecond)
+	if !complete.EvidenceCoverage || complete.SupportedCitations != 2 || len(complete.UnsupportedCitations) != 0 || !complete.Pass {
+		t.Errorf("score(evidence, fee and material) = %+v, want complete supporting evidence and pass=true", complete)
+	}
+	fabricated := fee
+	fabricated.Excerpt = "报名不收费，并且赠送礼品。"
+	invalid := score(tc, types.Answer{Status: "answered", Citations: []types.Citation{fabricated, material}}, hits, hits, time.Millisecond)
+	if invalid.CitationsLocated || invalid.SupportedCitations != 1 || len(invalid.UnsupportedCitations) != 1 || invalid.Pass {
+		t.Errorf("score(evidence, fabricated excerpt) = %+v, want unlocated and unsupported citation with pass=false", invalid)
+	}
+
+	rep := summarize([]Record{partial, complete})
+	if rep.EvidencePassed != 1 || rep.EvidenceTotal != 2 || rep.SupportedCitations != 3 || rep.ScoredCitations != 4 || rep.CitationPrecision != 0.75 {
+		t.Errorf("summarize(partial, complete) = %+v, want evidence=1/2 and citation precision=3/4", rep)
+	}
+}
+
+func TestOptionalEvidenceAllowsExtraRelevantSource(t *testing.T) {
+	tc := TestCase{
+		ID: "history", ExpectDocs: []string{"history"}, ExpectState: "answered",
+		ExpectEvidence: []Evidence{
+			{DocumentID: "history", Version: "v1", Location: "材料", ExcerptContains: "三项材料"},
+			{DocumentID: "guide", Version: "v1", Location: "材料", ExcerptContains: "三项材料", Optional: true},
+		},
+	}
+	hits := []types.Hit{
+		{Section: types.Section{DocID: "history", Version: "v1", SectionPath: "材料", Text: "2025 年提交三项材料。"}},
+		{Section: types.Section{DocID: "guide", Version: "v1", SectionPath: "材料", Text: "提交三项材料。"}},
+	}
+	primary := types.Citation{DocumentID: "history", Version: "v1", Location: "材料", Excerpt: "2025 年提交三项材料。"}
+	secondary := types.Citation{DocumentID: "guide", Version: "v1", Location: "材料", Excerpt: "提交三项材料。"}
+	for _, citations := range [][]types.Citation{{primary}, {primary, secondary}} {
+		rec := score(tc, types.Answer{Status: "answered", Citations: citations}, hits, hits, time.Millisecond)
+		if !rec.Pass || rec.SupportedCitations != len(citations) || !rec.EvidenceCoverage {
+			t.Errorf("score(history, citations=%+v) = %+v, want pass=true, all citations supported and required evidence covered", citations, rec)
+		}
+	}
+}
+
+func TestScoreCountsUnsupportedAnswerAsRefusalFailure(t *testing.T) {
+	tc := TestCase{ID: "missing-fee", Query: "报名费用是多少", ExpectState: "insufficient_evidence"}
+	answer := types.Answer{
+		Status:    "answered",
+		Citations: []types.Citation{{DocumentID: "plan", Version: "v1", Location: "入场券", Excerpt: "领取入场券"}},
+	}
+	rec := score(tc, answer, nil, nil, time.Millisecond)
+	rep := summarize([]Record{rec})
+	if rec.Refusal || rec.Pass || rep.RefusalPassed != 0 || rep.RefusalTotal != 1 || rep.Passed != 0 {
+		t.Errorf("score(%q, %+v) = %+v; summarize = %+v, want refusal failure 0/1", tc.Query, answer, rec, rep)
+	}
+}

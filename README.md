@@ -1,6 +1,6 @@
 # ragbot：可溯源的离线知识库问答
 
-**一句话定位：**纯 Go、无模型依赖的知识库问答系统；从 Markdown 提取证据，按版本与适用时间回答，证据不足时拒答。演示数据均为虚构资料。
+**一句话定位：**默认无需模型的 Go 知识库问答系统；从 Markdown 提取证据，按版本与适用时间回答，证据不足时拒答。另提供可选的云端 Embedding + pgvector + RRF 检索实验。演示数据均为虚构资料。
 
 ## 三个核心能力
 
@@ -10,7 +10,9 @@
 
 ## 运行
 
-需要 Go 1.22+；默认数据写入 `data/store.json`，无需 Python、模型或 API 密钥。首次使用建议指定全新数据目录，避免旧演示索引残留。
+需要 Go 1.25+；默认数据写入 `data/store.json`，离线问答无需 Python、模型或 API 密钥。向量实验使用 `github.com/jackc/pgx/v5` 连接 PostgreSQL/pgvector；默认问答仍可不连接数据库。首次使用建议指定全新数据目录，避免旧演示索引残留。
+
+模型配置样例见 [`.env.example`](.env.example)；真实密钥和 `RAGBOT_PG_DSN` 写入被 Git 忽略的 `.env`。`vector-sync`、`hybrid-search`、`hybrid-evaluate` 只读取 Embedding 的 `ENABLED=true`、`PROVIDER=remote_http`、`ENDPOINT_URL`（OpenAI 兼容 `/v1` 基地址或完整 `/embeddings` 地址）、`MODEL`、`API_KEY`、`TIMEOUT_SECONDS` 及 PostgreSQL DSN。Reranker 与 Generator 的配置仍是预留项，当前命令不会调用它们；普通 `ingest`、`ask`、`evaluate`、`serve` 也不加载 `.env`。
 
 ```bash
 go run ./cmd/ragbot -data data/demo ingest docs
@@ -18,20 +20,36 @@ go run ./cmd/ragbot -data data/demo ask "现在申请要交哪些材料"
 go run ./cmd/ragbot -data data/demo evaluate
 go run ./cmd/ragbot -data data/demo -queries eval/holdout.json -baseline data/demo/holdout.json evaluate
 go run ./cmd/ragbot -data data/demo serve
+go test -count=1 ./...
 ```
 
 `serve` 默认在 `http://localhost:8080` 提供现有网页和 API。导入非规范资料可用 `go run ./cmd/ragbot -data data/demo -allow-unstructured ingest <目录>`；其来源会标为未认证。需要重新评测时，请清空或更换演示数据目录。
 
+## 可选向量检索实验
+
+准备 PostgreSQL 与 pgvector 扩展，并在本机 `.env` 配好 Embedding 和 `RAGBOT_PG_DSN`。向量表由命令创建；每个 `-data` 目录默认映射到独立 collection。以下资料和标签均为虚构，和旧评测集分开报告：
+
+```bash
+go run ./cmd/ragbot -data data/dense-demo ingest docs-dense
+go run ./cmd/ragbot -data data/dense-demo vector-sync
+go run ./cmd/ragbot -data data/dense-demo vector-sync
+go run ./cmd/ragbot -data data/dense-demo hybrid-search "蓝桥木工场次开启切割设备要办哪些手续"
+go run ./cmd/ragbot -data data/dense-demo hybrid-evaluate
+```
+
+`vector-sync` 会把已认证资料的子块原文发送到配置的云端 Embedding 接口，仅用于获准提交的资料；重复运行按文本哈希跳过，并清理该 collection 的过期子块。资料更新后需再运行一次同步；检索会排除内容哈希不符的旧向量。检索对照保留 BM25、pgvector 余弦距离和 RRF 三套排名，RRF 在父节层去重，固定 `k=60`；当前是小语料精确向量扫描，没有建立 ANN 索引。`hybrid-search` 输出原文片段、位置与排名，**不会调用 Reranker、Generator，也不会把 RRF 分数当作证据充分性或直接生成答案**。普通 `ask` 仍使用原有离线 BM25 问答链路。
+
+2026-11-12 在隔离目录实际导入 3 份稠密虚构资料（12 节、28 子块），同步首次写入 28 行、再次写入 0 行；8 条人工标注检索题的目标节 Hit@5：首次 BM25 8/8、pgvector 7/8、RRF 8/8，复跑为 8/8、8/8、8/8。D07 的目标节明确说资料没有价格，因此命中该节仍须拒答；不同运行的向量排序也有波动。这是本地小测试床的检索结果，不代表回答支持率或真实资料泛化能力。云端模型与数据库不可用时，向量命令报错；离线问答命令仍可运行。
+
 ## 实测结果与已知边界
 
-2026-11-11 在全新目录导入 12/12 份虚构资料，并运行两套问题；全量 Go 测试与 `go vet ./...` 均通过。
+2026-11-12 在全新目录导入 12/12 份虚构资料并重新运行两套问题；`go test -count=1 ./...` 和 `go vet ./...` 均通过。新口径给每条有答案的问题标注必要证据片段，逐条检查引用是否属于人工确认的支持证据；旧口径只检查来源及摘录可定位。
 
-| 数据集 | 总通过 | Hit@5 | 来源可核验 | 拒答 |
-| --- | ---: | ---: | ---: | ---: |
-| 开发集（原 21 条 + H03 回归） | **22/22** | 19/19 | 19/19 | 3/3 |
-| 当前保留文件（含已参与修复的 H03） | **12/13** | 11/11 | 10/11 | 2/2 |
-| 未参与 H03 修复的 12 条 | **11/12** | 10/10 | 9/10 | 2/2 |
+| 数据集 | 新口径逐题通过 | Hit@5 | 来源可核验 | 证据合格题 | 引用支持 | 拒答 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 开发集（新增同主题缺字段负例 Q23） | **13/23** | 19/19 | 19/19 | 10/19 | 22/42 | 3/4 |
+| 当前保留文件（含已参与修复的 H03） | **8/13** | 11/11 | 10/11 | 6/11 | 11/18 | 2/2 |
 
-**H13 是已知 bad case：**问题问“星河工作坊活动对象的最低年龄是多少”，检索已命中正确资料，正文写“年满十二周岁”，但词项证据对齐仍拒答。H03“初审时限”曾失败，现已纳入开发集 Q22；不再把它算作独立验证成功。**BUG-10 仍未解决：**Q03“盖什么章”等回答可能带有无关引用。命中和逐字可定位不能证明语义充分，也不能据此宣称真实业务准确率。后续模型精排或语义判定需用独立标注集验证，关系入库仍须规则校验或人工确认。
+**已知失败：**Q23 问星河工作坊报名费用，资料未记载，系统却引用入场券领取并误答（BUG-13）。Q03“盖什么章”没有引用实际写明公章的句子；Q06 漏掉安全许可条件，多题包含无关引用（BUG-10）。新稠密语料也复现“升级材料包多少钱”在无价格时被标为 `answered`，以及报名费、木工手续问题混入无关引用；这些发生在未接入 RRF 的离线 `ask` 路径，仍需单独修复。H13“最低年龄”命中正确资料后仍拒答（BUG-12）。H03“初审时限”曾用于修复并转入开发集，不能当作独立验证成功。旧口径下开发集 22/22、保留文件 12/13 是历史结果；新数字来自更严格的证据标注和新增负例，并非本次修改了问答策略。词表与阈值本轮未改，不能据此宣称真实业务准确率。
 
-详细指标、首次失败记录与复现步骤见 [评测结果](eval/RESULTS.md)。本地工作记录保存在被 Git 忽略的 `project-notes/`。
+逐条结果、指标定义与复现步骤见 [评测结果](eval/RESULTS.md)；完整快照在 `eval/baseline/offline-evidence-*.json`。本地工作记录保存在被 Git 忽略的 `project-notes/`。

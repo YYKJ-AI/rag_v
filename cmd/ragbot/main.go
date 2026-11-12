@@ -17,6 +17,7 @@ import (
 
 	"ragbot/internal/engine"
 	"ragbot/internal/evaluate"
+	"ragbot/internal/generator"
 	"ragbot/internal/hybrid"
 	"ragbot/internal/ingest"
 	"ragbot/internal/modelconfig"
@@ -81,7 +82,16 @@ func main() {
 		fmt.Println(string(b))
 	case "serve":
 		addr := *addrFlag
-		srv := server.Handler(server.Deps{Engine: newEngine(ret), Ret: ret, WebDir: *webDir})
+		// 模型表述层（P2.0）：读取 .env；未启用/配置不全时 Generator 为 nil，走模板路径。
+		var gen *generator.Gateway
+		genCfg := generator.LoadConfigFromPath(".env")
+		if genCfg.Valid() {
+			gen = generator.NewGateway(genCfg)
+			fmt.Printf("模型表述层已启用: provider=%s model=%s\n", genCfg.Provider, genCfg.Model)
+		} else {
+			fmt.Println("模型表述层未启用（.env RAGBOT_GENERATOR_ENABLED=false 或配置不全），回答走确定性模板路径。")
+		}
+		srv := server.Handler(server.Deps{Engine: newEngine(ret), Ret: ret, WebDir: *webDir, Generator: gen})
 		fmt.Printf("ragbot 已启动: http://localhost%s （Ctrl+C 停止）\n", addr)
 		if err := http.ListenAndServe(addr, srv); err != nil {
 			die(err)

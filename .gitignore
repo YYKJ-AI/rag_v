@@ -3,3 +3,8 @@ ragbot.exe
 *.exe
 eval/baseline/latest.json
 project-notes/
+
+# Local model settings and future credentials.
+.env
+.env.*
+!.env.example

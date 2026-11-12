@@ -12,6 +12,8 @@
 
 需要 Go 1.22+；默认数据写入 `data/store.json`，无需 Python、模型或 API 密钥。首次使用建议指定全新数据目录，避免旧演示索引残留。
 
+后续模型接入的配置样例见 [`.env.example`](.env.example)；本机值写入被 Git 忽略的 `.env`。当前 CLI 尚不读取 `.env` 或其中的模型变量，运行仍走上述确定性链路。
+
 ```bash
 go run ./cmd/ragbot -data data/demo ingest docs
 go run ./cmd/ragbot -data data/demo ask "现在申请要交哪些材料"

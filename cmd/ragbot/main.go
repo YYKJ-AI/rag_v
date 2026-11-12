@@ -3,6 +3,9 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,22 +17,31 @@ import (
 
 	"ragbot/internal/engine"
 	"ragbot/internal/evaluate"
+	"ragbot/internal/hybrid"
 	"ragbot/internal/ingest"
+	"ragbot/internal/modelconfig"
+	"ragbot/internal/remoteembed"
 	"ragbot/internal/retriever"
 	"ragbot/internal/server"
 	"ragbot/internal/store"
+	"ragbot/internal/types"
+	"ragbot/internal/vectorstore"
 )
 
 func main() {
 	dataDir := flag.String("data", "data", "数据目录（store.json 落盘位置）")
 	docsDir := flag.String("docs", "docs", "文档目录")
 	queries := flag.String("queries", "eval/queries.json", "评测查询集")
+	retrievalQueries := flag.String("retrieval-queries", "eval/dense-retrieval.json", "混合检索评测查询集")
 	baseline := flag.String("baseline", "eval/baseline/latest.json", "评测结果输出")
 	asOfStr := flag.String("as-of", "", "时间点查询（2006-01-02）")
 	scopeKey := flag.String("scope-key", "", "适用范围键（文档 scope_keys 中的值）")
 	allowUnstructured := flag.Bool("allow-unstructured", false, "允许正文型 Markdown 以待审核身份降级入库")
 	addrFlag := flag.String("addr", ":8080", "serve 模式监听地址")
 	webDir := flag.String("web", "web", "静态页目录")
+	envFile := flag.String("env", ".env", "向量实验的本机环境文件")
+	collectionFlag := flag.String("collection", "", "pgvector collection（默认按数据目录隔离）")
+	pool := flag.Int("pool", 20, "混合检索每路候选节数")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
@@ -100,6 +112,44 @@ func main() {
 			die(err)
 		}
 		printReport(rep)
+	case "vector-sync":
+		svc, collection, err := newHybridService(*envFile, *dataDir, *collectionFlag, ret)
+		if err != nil {
+			die(err)
+		}
+		defer svc.Vectors.Close(context.Background())
+		stats, err := svc.Sync(context.Background(), st.Docs, st.Sections, st.Chunks)
+		if err != nil {
+			die(err)
+		}
+		fmt.Printf("向量同步 collection=%s eligible=%d embedded=%d skipped=%d pruned=%d rows=%d\n",
+			collection, stats.Eligible, stats.Embedded, stats.Skipped, stats.Pruned, stats.Rows)
+	case "hybrid-search":
+		q := strings.TrimSpace(flag.Arg(1))
+		if q == "" {
+			die(fmt.Errorf("用法：ragbot hybrid-search \"查询\""))
+		}
+		svc, _, err := newHybridService(*envFile, *dataDir, *collectionFlag, ret)
+		if err != nil {
+			die(err)
+		}
+		defer svc.Vectors.Close(context.Background())
+		lexical, semantic, fused, err := svc.Search(context.Background(), q, *pool, 8)
+		if err != nil {
+			die(err)
+		}
+		printHits("BM25", lexical, 8)
+		printHits("pgvector (cosine distance; lower is nearer)", semantic, 8)
+		printHits("RRF", fused, 8)
+	case "hybrid-evaluate":
+		svc, _, err := newHybridService(*envFile, *dataDir, *collectionFlag, ret)
+		if err != nil {
+			die(err)
+		}
+		defer svc.Vectors.Close(context.Background())
+		if err := evaluateHybridRetrieval(context.Background(), svc, *retrievalQueries, *pool); err != nil {
+			die(err)
+		}
 	default:
 		fmt.Println(`ragbot — 可溯源知识库问答
 
@@ -107,6 +157,9 @@ func main() {
   ragbot ingest [目录]            导入 Markdown 文档（默认 docs/）
   ragbot -as-of 日期 -scope-key 键 ask "问题"  按时间和适用范围提问（参数可省略）
   ragbot evaluate                 运行评测集，输出指标与逐条结果
+  ragbot vector-sync              生成子块向量并幂等写入 pgvector
+  ragbot hybrid-search "问题"       对照 BM25、pgvector 与 RRF 排名
+  ragbot hybrid-evaluate          按 eval/dense-retrieval.json 检索召回对照
 
 参数：
   -data 目录    数据落盘位置（默认 data/）
@@ -114,6 +167,106 @@ func main() {
   -queries 文件 评测查询集（默认 eval/queries.json）
   -scope-key 键  仅使用标注该适用范围键或 * 的文档`)
 	}
+}
+
+func newHybridService(envFile, dataDir, collection string, ret *retriever.Retriever) (*hybrid.Service, string, error) {
+	cfg, err := modelconfig.LoadVector(envFile)
+	if err != nil {
+		return nil, "", err
+	}
+	if collection == "" {
+		absolute, err := filepath.Abs(dataDir)
+		if err != nil {
+			return nil, "", err
+		}
+		sum := sha256.Sum256([]byte(strings.ToLower(absolute)))
+		collection = "ragbot-" + hex.EncodeToString(sum[:8])
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	vectors, err := vectorstore.Open(ctx, cfg.DSN, collection, cfg.Embedding.Model)
+	if err != nil {
+		return nil, "", err
+	}
+	return &hybrid.Service{Embeddings: remoteembed.New(cfg.Embedding), Vectors: vectors, Retriever: ret}, collection, nil
+}
+
+func printHits(label string, hits []types.Hit, limit int) {
+	fmt.Println(label + ":")
+	for i, hit := range hits {
+		if i >= limit {
+			break
+		}
+		excerpt := []rune(strings.ReplaceAll(hit.Chunk.Text, "\n", " "))
+		if len(excerpt) > 80 {
+			excerpt = excerpt[:80]
+		}
+		fmt.Printf("  %d. %.5f %s %s (%s) %q\n", i+1, hit.Score,
+			hit.Section.ID, hit.Section.SectionPath, hit.Chunk.ID, string(excerpt))
+	}
+}
+
+func evaluateHybridRetrieval(ctx context.Context, svc *hybrid.Service, path string, pool int) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var cases []struct {
+		ID             string   `json:"id"`
+		Query          string   `json:"query"`
+		ExpectSections []string `json:"expect_sections"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		return err
+	}
+	if len(cases) == 0 {
+		return fmt.Errorf("检索评测集为空")
+	}
+	var bm25Passed, vectorPassed, fusedPassed int
+	for _, tc := range cases {
+		if tc.ID == "" || strings.TrimSpace(tc.Query) == "" || len(tc.ExpectSections) == 0 {
+			return fmt.Errorf("检索评测条目缺少 id、query 或 expect_sections")
+		}
+		lexical, semantic, fused, err := svc.Search(ctx, tc.Query, pool, 5)
+		if err != nil {
+			return fmt.Errorf("%s 检索失败: %w", tc.ID, err)
+		}
+		bm25 := containsAllSections(lexical, tc.ExpectSections, 5)
+		vector := containsAllSections(semantic, tc.ExpectSections, 5)
+		rrf := containsAllSections(fused, tc.ExpectSections, 5)
+		if bm25 {
+			bm25Passed++
+		}
+		if vector {
+			vectorPassed++
+		}
+		if rrf {
+			fusedPassed++
+		}
+		fmt.Printf("%s BM25=%t vector=%t RRF=%t %s\n", tc.ID, bm25, vector, rrf, tc.Query)
+	}
+	fmt.Printf("检索目标节 Hit@5: BM25 %d/%d, vector %d/%d, RRF %d/%d（仅召回；D07 目标节说明缺少价格，不代表可回答）\n",
+		bm25Passed, len(cases), vectorPassed, len(cases), fusedPassed, len(cases))
+	return nil
+}
+
+func containsAllSections(hits []types.Hit, expected []string, top int) bool {
+	if len(expected) == 0 {
+		return false
+	}
+	seen := make(map[string]bool, top)
+	for i, hit := range hits {
+		if i >= top {
+			break
+		}
+		seen[hit.Section.ID] = true
+	}
+	for _, id := range expected {
+		if !seen[id] {
+			return false
+		}
+	}
+	return true
 }
 
 // ---- 组装辅助 ----

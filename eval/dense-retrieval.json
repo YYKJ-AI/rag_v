@@ -1,0 +1,10 @@
+[
+  {"id":"D01","query":"蓝桥手作营最低参加年龄是多少","expect_sections":["bluebridge-guide@v1#sec-2"],"note":"同节存在签字、录取和场地协助干扰事实"},
+  {"id":"D02","query":"未满十八周岁报名要上传什么","expect_sections":["bluebridge-guide@v1#sec-3"],"note":"步骤与材料必须定位到第二步"},
+  {"id":"D03","query":"蓝桥木工场次开启切割设备要办哪些手续","expect_sections":["bluebridge-venue@v1#sec-2"],"note":"同节报备与安全许可两项必要证据"},
+  {"id":"D04","query":"蓝桥活动人数超过四十人要增加什么","expect_sections":["bluebridge-venue@v1#sec-2","bluebridge-venue@v1#sec-4"],"note":"跨节重复信息与干扰项"},
+  {"id":"D05","query":"蓝桥手作营报名费是多少","expect_sections":["bluebridge-budget@v1#sec-2"],"note":"与预算采购单价区分"},
+  {"id":"D06","query":"防护手套的采购单价是多少","expect_sections":["bluebridge-budget@v1#sec-3"],"note":"表格单行定位"},
+  {"id":"D07","query":"升级材料包多少钱","expect_sections":["bluebridge-budget@v1#sec-5"],"note":"文档明确未给金额，不可把采购价当售价"},
+  {"id":"D08","query":"蓝桥报名后在哪里领卡，木工开场前要检查什么","expect_sections":["bluebridge-guide@v1#sec-3","bluebridge-venue@v1#sec-3"],"note":"跨文档证据组"}
+]

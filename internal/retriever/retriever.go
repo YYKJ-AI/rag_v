@@ -145,6 +145,24 @@ func (r *Retriever) VerifiedDocs() []*types.Document {
 	return r.verified.docs
 }
 
+// VerifiedChunkHit resolves a vector row against the current certified JSON
+// snapshot. Rows for stale or review-only chunks cannot become answer sources.
+func (r *Retriever) VerifiedChunkHit(id string) (types.Hit, bool) {
+	if r.verified == nil {
+		return types.Hit{}, false
+	}
+	for _, chunk := range r.verified.chunks {
+		if chunk.ID != id {
+			continue
+		}
+		section := r.verified.secs[chunk.SectionID]
+		if section != nil && r.verified.docOf(section) != nil {
+			return types.Hit{Section: *section, Chunk: *chunk}, true
+		}
+	}
+	return types.Hit{}, false
+}
+
 // Section returns the exact stored parent block for a parsed pointer target.
 func (r *Retriever) Section(id string) (types.Section, bool) {
 	section := r.secs[id]

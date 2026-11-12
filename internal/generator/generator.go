@@ -123,7 +123,7 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 		query, baseAnswer, ev.String())
 
 	payload := map[string]any{
-		"model": g.cfg.Model,
+		"model":  g.cfg.Model,
 		"stream": true,
 		"messages": []map[string]string{
 			{"role": "system", "content": systemGuard},

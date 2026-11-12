@@ -23,9 +23,9 @@ func TestLoadConfigDisabledByDefault(t *testing.T) {
 		t.Fatal("缺 BaseURL/Model 时不应启用")
 	}
 	cfg = generator.LoadConfig(map[string]string{
-		"RAGBOT_GENERATOR_ENABLED":      "true",
-		"RAGBOT_GENERATOR_BASE_URL":     "http://x/v1",
-		"RAGBOT_GENERATOR_MODEL":        "test-model",
+		"RAGBOT_GENERATOR_ENABLED":         "true",
+		"RAGBOT_GENERATOR_BASE_URL":        "http://x/v1",
+		"RAGBOT_GENERATOR_MODEL":           "test-model",
 		"RAGBOT_GENERATOR_TIMEOUT_SECONDS": "15",
 	})
 	if !cfg.Valid() {

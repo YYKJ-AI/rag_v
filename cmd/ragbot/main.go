@@ -175,11 +175,13 @@ func doIngest(st *store.Store, ret *retriever.Retriever, dir string, allowUnstru
 }
 
 func printReport(rep *evaluate.Report) {
-	fmt.Printf("评测结果：%d/%d 通过 | Hit@5=%d/%d (%.2f) | 有出处=%d/%d (%.2f) | 来源可核验=%d/%d (%.2f) | 拒答=%d/%d (%.2f) | 回答平均耗时=%.3fms\n",
+	fmt.Printf("评测结果：%d/%d 通过 | Hit@5=%d/%d (%.2f) | 有出处=%d/%d (%.2f) | 来源可核验=%d/%d (%.2f) | 必要证据完整且无无关引用=%d/%d (%.2f) | 引用支持=%d/%d (%.2f) | 拒答=%d/%d (%.2f) | 回答平均耗时=%.3fms\n",
 		rep.Passed, rep.Total,
 		rep.Hit5Passed, rep.Hit5Total, rep.Hit5Rate,
 		rep.CitedPassed, rep.CitedTotal, rep.CitedRate,
 		rep.SourcePassed, rep.SourceTotal, rep.SourceRate,
+		rep.EvidencePassed, rep.EvidenceTotal, rep.EvidenceRate,
+		rep.SupportedCitations, rep.ScoredCitations, rep.CitationPrecision,
 		rep.RefusalPassed, rep.RefusalTotal, rep.RefusalRate, rep.AvgLatencyMs)
 	for _, r := range rep.Records {
 		mark := "✓"
@@ -191,8 +193,8 @@ func printReport(rep *evaluate.Report) {
 				mark, r.ID, r.Status, r.Refusal, r.LatencyMs, r.Query)
 			continue
 		}
-		fmt.Printf("  %s %-4s %-22s hit5=%-5v cited=%-5v source=%-5v located=%-5v %.3fms  %s\n",
-			mark, r.ID, r.Status, r.Hit5, r.Cited, r.SourceCoverage, r.CitationsLocated, r.LatencyMs, r.Query)
+		fmt.Printf("  %s %-4s %-22s hit5=%-5v cited=%-5v source=%-5v located=%-5v evidence=%-5v support=%d/%d %.3fms  %s\n",
+			mark, r.ID, r.Status, r.Hit5, r.Cited, r.SourceCoverage, r.CitationsLocated, r.EvidenceCoverage, r.SupportedCitations, r.ScoredCitations, r.LatencyMs, r.Query)
 	}
 }
 

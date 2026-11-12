@@ -18,53 +18,78 @@ type Source struct {
 	Version    string `json:"version"`
 }
 
-// TestCase is one labeled query. ExpectSources refines ExpectDocs with versions.
+// Evidence is a manually reviewed passage that directly supports a query.
+// Matching the document and location alone is insufficient: the cited excerpt
+// must also contain ExcerptContains.
+type Evidence struct {
+	DocumentID      string `json:"document_id"`
+	Version         string `json:"version"`
+	Location        string `json:"location"`
+	ExcerptContains string `json:"excerpt_contains"`
+	Optional        bool   `json:"optional,omitempty"`
+}
+
+// TestCase is one labeled query. ExpectSources refines document identity, and
+// ExpectEvidence adds manually reviewed passages for answer support checks.
 type TestCase struct {
-	ID            string   `json:"id"`
-	Query         string   `json:"query"`
-	ExpectDocs    []string `json:"expect_docs"`
-	ExpectSources []Source `json:"expect_sources,omitempty"`
-	ExpectState   string   `json:"expect_status"`
-	Note          string   `json:"note,omitempty"`
+	ID             string     `json:"id"`
+	Query          string     `json:"query"`
+	ExpectDocs     []string   `json:"expect_docs"`
+	ExpectSources  []Source   `json:"expect_sources,omitempty"`
+	ExpectEvidence []Evidence `json:"expect_evidence,omitempty"`
+	ExpectState    string     `json:"expect_status"`
+	Note           string     `json:"note,omitempty"`
 }
 
 // Record contains independent checks for one query.
 type Record struct {
-	ID               string           `json:"id"`
-	Query            string           `json:"query"`
-	ExpectedStatus   string           `json:"expected_status"`
-	Status           string           `json:"status"`
-	Hit5             bool             `json:"hit5"`
-	Cited            bool             `json:"cited"`
-	SourceCoverage   bool             `json:"source_coverage"`
-	CitationsLocated bool             `json:"citations_located"`
-	Citations        []types.Citation `json:"citations,omitempty"`
-	MissingSources   []Source         `json:"missing_sources,omitempty"`
-	Refusal          bool             `json:"refusal"`
-	Pass             bool             `json:"pass"`
-	LatencyMs        float64          `json:"latency_ms"`
+	ID                   string           `json:"id"`
+	Query                string           `json:"query"`
+	ExpectedStatus       string           `json:"expected_status"`
+	Status               string           `json:"status"`
+	Hit5                 bool             `json:"hit5"`
+	Cited                bool             `json:"cited"`
+	SourceCoverage       bool             `json:"source_coverage"`
+	CitationsLocated     bool             `json:"citations_located"`
+	Citations            []types.Citation `json:"citations,omitempty"`
+	MissingSources       []Source         `json:"missing_sources,omitempty"`
+	EvidenceLabeled      bool             `json:"evidence_labeled"`
+	EvidenceCoverage     bool             `json:"evidence_coverage"`
+	SupportedCitations   int              `json:"supported_citations"`
+	ScoredCitations      int              `json:"scored_citations"`
+	UnsupportedCitations []types.Citation `json:"unsupported_citations,omitempty"`
+	MissingEvidence      []Evidence       `json:"missing_evidence,omitempty"`
+	Refusal              bool             `json:"refusal"`
+	Pass                 bool             `json:"pass"`
+	LatencyMs            float64          `json:"latency_ms"`
 }
 
 // Report summarizes counts with explicit denominators.
 type Report struct {
-	GeneratedAt   string   `json:"generated_at"`
-	Total         int      `json:"total"`
-	Passed        int      `json:"passed"`
-	Hit5Passed    int      `json:"hit5_passed"`
-	Hit5Total     int      `json:"hit5_total"`
-	Hit5Rate      float64  `json:"hit5_rate"`
-	CitedPassed   int      `json:"cited_passed"`
-	CitedTotal    int      `json:"cited_total"`
-	CitedRate     float64  `json:"cited_rate"`
-	SourcePassed  int      `json:"source_passed"`
-	SourceTotal   int      `json:"source_total"`
-	SourceRate    float64  `json:"source_rate"`
-	RefusalPassed int      `json:"refusal_passed"`
-	RefusalTotal  int      `json:"refusal_total"`
-	RefusalRate   float64  `json:"refusal_rate"`
-	RefusalOK     bool     `json:"refusal_ok"`
-	AvgLatencyMs  float64  `json:"avg_latency_ms"`
-	Records       []Record `json:"records"`
+	GeneratedAt        string   `json:"generated_at"`
+	Total              int      `json:"total"`
+	Passed             int      `json:"passed"`
+	Hit5Passed         int      `json:"hit5_passed"`
+	Hit5Total          int      `json:"hit5_total"`
+	Hit5Rate           float64  `json:"hit5_rate"`
+	CitedPassed        int      `json:"cited_passed"`
+	CitedTotal         int      `json:"cited_total"`
+	CitedRate          float64  `json:"cited_rate"`
+	SourcePassed       int      `json:"source_passed"`
+	SourceTotal        int      `json:"source_total"`
+	SourceRate         float64  `json:"source_rate"`
+	EvidencePassed     int      `json:"evidence_passed"`
+	EvidenceTotal      int      `json:"evidence_total"`
+	EvidenceRate       float64  `json:"evidence_rate"`
+	SupportedCitations int      `json:"supported_citations"`
+	ScoredCitations    int      `json:"scored_citations"`
+	CitationPrecision  float64  `json:"citation_precision"`
+	RefusalPassed      int      `json:"refusal_passed"`
+	RefusalTotal       int      `json:"refusal_total"`
+	RefusalRate        float64  `json:"refusal_rate"`
+	RefusalOK          bool     `json:"refusal_ok"`
+	AvgLatencyMs       float64  `json:"avg_latency_ms"`
+	Records            []Record `json:"records"`
 }
 
 // Run evaluates the answer and retrieval results for every labeled query.
@@ -114,7 +139,8 @@ func score(tc TestCase, ans types.Answer, topHits, allHits []types.Hit, elapsed 
 	}
 
 	rec.CitationsLocated = rec.Cited
-	for _, citation := range ans.Citations {
+	locatedCitations := make([]bool, len(ans.Citations))
+	for i, citation := range ans.Citations {
 		located := false
 		if citation.DocumentID != "" && citation.Version != "" && citation.Location != "" && citation.Excerpt != "" {
 			for _, hit := range allHits {
@@ -128,6 +154,7 @@ func score(tc TestCase, ans types.Answer, topHits, allHits []types.Hit, elapsed 
 		if !located {
 			rec.CitationsLocated = false
 		}
+		locatedCitations[i] = located
 	}
 
 	rec.SourceCoverage = rec.Cited
@@ -178,8 +205,53 @@ func score(tc TestCase, ans types.Answer, topHits, allHits []types.Hit, elapsed 
 			}
 		}
 	}
+	if len(tc.ExpectEvidence) > 0 {
+		rec.EvidenceLabeled = true
+		rec.EvidenceCoverage = true
+		rec.ScoredCitations = len(ans.Citations)
+		for _, want := range tc.ExpectEvidence {
+			if want.Optional {
+				continue
+			}
+			found := false
+			for _, citation := range ans.Citations {
+				if matchesEvidence(citation, want) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				rec.EvidenceCoverage = false
+				rec.MissingEvidence = append(rec.MissingEvidence, want)
+			}
+		}
+		for i, citation := range ans.Citations {
+			supported := false
+			for _, want := range tc.ExpectEvidence {
+				if locatedCitations[i] && matchesEvidence(citation, want) {
+					supported = true
+					break
+				}
+			}
+			if supported {
+				rec.SupportedCitations++
+			} else {
+				rec.UnsupportedCitations = append(rec.UnsupportedCitations, citation)
+			}
+		}
+	}
 	rec.Pass = ans.Status == tc.ExpectState && rec.Hit5 && rec.SourceCoverage && rec.CitationsLocated
+	if rec.EvidenceLabeled {
+		rec.Pass = rec.Pass && rec.EvidenceCoverage && len(rec.UnsupportedCitations) == 0
+	}
 	return rec
+}
+
+func matchesEvidence(citation types.Citation, want Evidence) bool {
+	return citation.DocumentID == want.DocumentID &&
+		citation.Version == want.Version &&
+		citation.Location == want.Location &&
+		want.ExcerptContains != "" && strings.Contains(citation.Excerpt, want.ExcerptContains)
 }
 
 func summarize(records []Record) *Report {
@@ -195,6 +267,14 @@ func summarize(records []Record) *Report {
 				rep.RefusalPassed++
 			}
 			continue
+		}
+		if rec.EvidenceLabeled {
+			rep.EvidenceTotal++
+			if rec.CitationsLocated && rec.EvidenceCoverage && len(rec.UnsupportedCitations) == 0 {
+				rep.EvidencePassed++
+			}
+			rep.SupportedCitations += rec.SupportedCitations
+			rep.ScoredCitations += rec.ScoredCitations
 		}
 		rep.Hit5Total++
 		rep.CitedTotal++
@@ -219,6 +299,12 @@ func summarize(records []Record) *Report {
 	}
 	if rep.RefusalTotal > 0 {
 		rep.RefusalRate = float64(rep.RefusalPassed) / float64(rep.RefusalTotal)
+	}
+	if rep.EvidenceTotal > 0 {
+		rep.EvidenceRate = float64(rep.EvidencePassed) / float64(rep.EvidenceTotal)
+	}
+	if rep.ScoredCitations > 0 {
+		rep.CitationPrecision = float64(rep.SupportedCitations) / float64(rep.ScoredCitations)
 	}
 	rep.RefusalOK = rep.RefusalPassed == rep.RefusalTotal
 	return rep
@@ -245,6 +331,23 @@ func LoadQueries(path string) ([]TestCase, error) {
 	}
 	if len(qs) < 12 {
 		return nil, fmt.Errorf("查询集不足 12 条（当前 %d），任务书要求至少 12 条", len(qs))
+	}
+	for _, tc := range qs {
+		if tc.ExpectState == "insufficient_evidence" && len(tc.ExpectEvidence) > 0 {
+			return nil, fmt.Errorf("查询 %s: 拒答样本不能标注必要证据", tc.ID)
+		}
+		required := 0
+		for _, evidence := range tc.ExpectEvidence {
+			if evidence.DocumentID == "" || evidence.Version == "" || evidence.Location == "" || evidence.ExcerptContains == "" {
+				return nil, fmt.Errorf("查询 %s: expect_evidence 必须包含文档、版本、位置与摘录片段", tc.ID)
+			}
+			if !evidence.Optional {
+				required++
+			}
+		}
+		if len(tc.ExpectEvidence) > 0 && required == 0 {
+			return nil, fmt.Errorf("查询 %s: expect_evidence 至少需要一条必要证据", tc.ID)
+		}
 	}
 	return qs, nil
 }

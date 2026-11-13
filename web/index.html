@@ -179,7 +179,7 @@
         <input type="text" class="opt" id="scope" placeholder="适用范围键（可选）">
         <button id="btn" onclick="ask()">发送</button>
       </div>
-      <div class="hint">模型已启用时回答先出引用、后流式润色；模型不可用自动回退确定性模板（界面如实标注）。留空日期则由问句自动推断时间点。</div>
+      <div class="hint">模型启用时会先核验完整改写，再显示回答与出处；模型不可用时回退确定性模板。留空日期则由问句自动推断时间点。</div>
       <div id="err" class="error-box" hidden></div>
     </div>
   </main>
@@ -274,13 +274,13 @@ async function ask() {
           scrollBottom();
         } else if (event === 'delta') {
           aiText += p.text;
-          bubble.innerHTML = '';
-          const tn = document.createElement('span');
+          let tn = bubble.querySelector('.answer-text');
+          if (!tn) {
+            tn = document.createElement('span');
+            tn.className = 'answer-text';
+            bubble.insertBefore(tn, bubble.querySelector('.cursor'));
+          }
           tn.textContent = aiText;
-          bubble.appendChild(tn);
-          const cur = document.createElement('span');
-          cur.className = 'cursor';
-          bubble.appendChild(cur);
           scrollBottom();
         } else if (event === 'notice') {
           notice = p.fallback_reason || '';

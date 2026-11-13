@@ -1,5 +1,17 @@
 # 离线问答评测结果（2026-11-12）
 
+## 2026-11-13：现场问题固定回归
+
+`eval/gate-regression.json` 含 14 条现场及相邻问法；隔离索引依次导入 `docs/` 12 份和 `docs-dense/` 3 份。修复前严格逐题 1/14，修复后 5/14；修复后 Hit@5 8/9、必要证据合格 2/9、引用支持 4/20、正确拒答 3/5。通过 G07、G08、G12–G14。G08 的数字条件与所问职责必须由同节相邻原文共同确认；G12–G14 是直接越权输入，不计为有证据回答。其余 9 题保留失败状态，包括 G09 未知未来发布时间误答、G10 经费跨主题引用、G11 年龄证据误选。仅修复机械安全边界和一类明确的条件例外，没有接入 RRF 或 Reranker 到 `ask`。
+
+```bash
+go run ./cmd/ragbot -data data/gate-demo ingest docs
+go run ./cmd/ragbot -data data/gate-demo ingest docs-dense
+go run ./cmd/ragbot -data data/gate-demo -queries eval/gate-regression.json -baseline data/gate-demo/result.json evaluate
+```
+
+旧 12 份资料独立索引复跑保持开发集 13/23、保留文件 8/13；两套测试床不混报。
+
 ## 本轮证据支持指标
 
 **数据：**全新隔离目录导入 `docs/` 12 份虚构资料。问答代码、词表和阈值未修改。开发集增加 Q23“星河工作坊报名费用是多少？”作为同主题缺字段负例；原 H13 留在保留集。全部 19 条开发集和 11 条保留集有答案题均标注必要证据，部分允许引用的额外支持句标为可选。逐条标签在 `eval/queries.json` 和 `eval/holdout.json`；完整结果在 `eval/baseline/offline-evidence-dev.json` 和 `eval/baseline/offline-evidence-holdout.json`。

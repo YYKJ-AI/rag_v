@@ -4,10 +4,12 @@ package engine
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"ragbot/internal/safety"
 	"ragbot/internal/tokenize"
 	"ragbot/internal/types"
 )
@@ -40,6 +42,9 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 // AnswerWithScope answers using only documents whose scope_keys include scopeKey or *.
 // An empty scopeKey keeps the existing unscoped behavior.
 func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string) types.Answer {
+	if safety.IsDirectOverride(query) {
+		return types.Answer{Status: "insufficient_evidence", Answer: "该输入不是可由资料回答的问题，无法提供有出处的回答。"}
+	}
 	if asOf == nil {
 		asOf = inferQueryTime(query)
 	}
@@ -65,6 +70,13 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 		}
 	}
 	evids = withoutPointerDeclarations(evids)
+	directCondition := false
+	if direct, ok := conditionalNoRequirementEvidence(query, evids); ok {
+		// Keep only the directly qualified exception; nearby permission language
+		// does not support a different subject asked with the same number.
+		evids = []evidence{direct}
+		directCondition = true
+	}
 	if clauses := splitQueryClauses(query); len(clauses) > 1 {
 		var combined []evidence
 		for _, clause := range clauses {
@@ -96,7 +108,7 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 
 	// 是非问句（"可以…吗/能不能…"）需要明确的许可/禁止性表述；
 	// 证据里没有这类语义 → 不允许用无关相似内容拼出貌似成功的回答。
-	if isModalQuestion(query) && !hasModalVerdict(evids) {
+	if isModalQuestion(query) && !hasModalVerdict(evids) && !directCondition {
 		return types.Answer{
 			Status: "insufficient_evidence",
 			Answer: "资料中未找到对该问题的明确许可或禁止性规定，无法给出有出处的回答。",
@@ -674,6 +686,32 @@ func hasModalVerdict(evids []evidence) bool {
 		}
 	}
 	return false
+}
+
+var exactQuantity = regexp.MustCompile(`(?:恰好|正好|刚好)([零〇一二三四五六七八九十百千万两0-9]+(?:人|岁|天|日|元|项))`)
+var requestedRequirement = regexp.MustCompile(`(?:需要|要)([^，。？?吗呢]+)(?:吗|呢|？|\?)?$`)
+
+// conditionalNoRequirementEvidence accepts an explicit exception only when
+// its immediately preceding rule names the requested requirement and quantity.
+// This is a narrow offline fallback, not a general semantic entailment rule.
+func conditionalNoRequirementEvidence(query string, evids []evidence) (evidence, bool) {
+	condition := exactQuantity.FindStringSubmatch(query)
+	requirement := requestedRequirement.FindStringSubmatch(query)
+	if len(condition) < 2 || len(requirement) < 2 || requirement[1] == "" {
+		return evidence{}, false
+	}
+	for _, ev := range evids {
+		if !strings.Contains(ev.Sentence, condition[0]) || !strings.Contains(ev.Sentence, "不触发") {
+			continue
+		}
+		sentences := splitSentences(ev.Sec.Text)
+		for i := 1; i < len(sentences); i++ {
+			if sentences[i] == ev.Sentence && strings.Contains(sentences[i-1], condition[1]) && strings.Contains(sentences[i-1], requirement[1]) {
+				return ev, true
+			}
+		}
+	}
+	return evidence{}, false
 }
 
 // needsUnsupportedReasoning rejects operations without a directly stated result.

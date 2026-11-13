@@ -97,7 +97,12 @@ type Gateway struct {
 }
 
 func NewGateway(cfg Config) *Gateway {
-	return &Gateway{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
+	return &Gateway{cfg: cfg, client: &http.Client{
+		Timeout: cfg.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}}
 }
 
 const systemGuard = "你是制度知识库的回答改写助手。规则：" +
@@ -107,7 +112,8 @@ const systemGuard = "你是制度知识库的回答改写助手。规则：" +
 	"4) 如果既有回答本身表示证据不足或冲突，原样保留该结论，不做修饰。"
 
 // StreamAnswer 用云端模型流式改写确定性回答。
-// onDelta 在每个增量文本片段时调用；返回完整文本。任何失败返回 error。
+// The upstream may stream, but onDelta receives only the completed response.
+// A truncated or malformed stream must never reach the client as a partial answer.
 func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer string, evidence []string, onDelta func(string)) (string, error) {
 	if !g.cfg.Valid() {
 		return "", fmt.Errorf("generator 未启用或配置不完整")
@@ -153,6 +159,7 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 	}
 
 	var full strings.Builder
+	done := false
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -161,8 +168,12 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 			continue
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" || data == "[DONE]" {
+		if data == "" {
 			continue
+		}
+		if data == "[DONE]" {
+			done = true
+			break
 		}
 		var chunk struct {
 			Choices []struct {
@@ -172,21 +183,27 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue // 跳过无法解析的行，不中断流
+			return "", fmt.Errorf("generator 流响应格式错误")
 		}
 		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
 			full.WriteString(chunk.Choices[0].Delta.Content)
-			if onDelta != nil {
-				onDelta(chunk.Choices[0].Delta.Content)
+			if full.Len() > 16<<10 {
+				return "", fmt.Errorf("generator 返回内容过长")
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "", fmt.Errorf("generator 流读取失败: %w", err)
 	}
+	if !done {
+		return "", fmt.Errorf("generator 流未正常结束")
+	}
 	out := strings.TrimSpace(full.String())
 	if out == "" {
 		return "", fmt.Errorf("generator 返回空内容")
+	}
+	if onDelta != nil {
+		onDelta(out)
 	}
 	return out, nil
 }

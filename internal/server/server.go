@@ -13,6 +13,7 @@ import (
 	"ragbot/internal/engine"
 	"ragbot/internal/generator"
 	"ragbot/internal/retriever"
+	"ragbot/internal/safety"
 )
 
 // Deps 服务依赖（main 组装后注入）
@@ -113,8 +114,8 @@ func Handler(d Deps) http.Handler {
 		writeJSON(w, map[string]any{"hits": out})
 	})
 
-	// 流式问答：SSE。先输出确定性结果（状态+citations，模型无权改动），
-	// 再流式输出表述层（generator 启用时为模型改写，否则/失败时为模板文本）。
+	// SSE 问答：先验证完整模型表述，再输出状态、引用和正文。
+	// 模型失败或越过机械事实边界时，只发送确定性模板，不暴露半截输出。
 	mux.HandleFunc("POST /api/ask/stream", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Query    string `json:"query"`
@@ -157,40 +158,48 @@ func Handler(d Deps) http.Handler {
 		start := time.Now()
 		ans := d.Engine.AnswerWithScope(req.Query, asOf, req.ScopeKey)
 
-		meta := map[string]any{
-			"status":       ans.Status,
-			"citations":    ans.Citations,
+		visible := ans.Answer
+		generatedBy := "template"
+		var fallbackReason string
+		// 拒答和冲突不调用模型；完整模型输出验证通过后才能到达客户端。
+		if ans.Status == "answered" && d.Generator != nil {
+			evidence := make([]string, 0, len(ans.Citations))
+			for _, c := range ans.Citations {
+				evidence = append(evidence, c.Excerpt)
+			}
+			unsafeEvidence := false
+			for _, excerpt := range evidence {
+				if safety.IsDirectOverride(excerpt) {
+					unsafeEvidence = true
+					break
+				}
+			}
+			if unsafeEvidence {
+				fallbackReason = "引用资料包含指令样式文本，已停用模型改写"
+			} else {
+				ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+				defer cancel()
+				llmText, err := d.Generator.StreamAnswer(ctx, req.Query, ans.Answer, evidence, nil)
+				if err == nil {
+					err = d.Generator.ValidateRewrite(ans.Answer, evidence, llmText)
+				}
+				if err != nil {
+					fallbackReason = "模型请求或表述校验失败"
+				} else {
+					visible = llmText
+					generatedBy = "llm"
+				}
+			}
+		}
+		send("meta", map[string]any{
+			"status": ans.Status, "citations": ans.Citations,
 			"latency_ms":   time.Since(start).Milliseconds(),
 			"detected":     asOf == nil && engine.QueryHasInferredTime(req.Query),
-			"generated_by": "template",
-		}
-		send("meta", meta)
-
-		// 拒答/冲突不调用模型：裁决与结论由确定性引擎负责。
-		if ans.Status != "answered" || d.Generator == nil {
-			send("delta", map[string]any{"text": ans.Answer})
-			send("done", map[string]any{
-				"total_ms":     time.Since(start).Milliseconds(),
-				"generated_by": "template",
-			})
-			return
-		}
-
-		evidence := make([]string, 0, len(ans.Citations))
-		for _, c := range ans.Citations {
-			evidence = append(evidence, c.Excerpt)
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		llmText, err := d.Generator.StreamAnswer(ctx, req.Query, ans.Answer, evidence, func(delta string) {
-			send("delta", map[string]any{"text": delta})
+			"generated_by": generatedBy,
 		})
-		generatedBy := "llm"
-		if err != nil || strings.TrimSpace(llmText) == "" {
-			// 任何失败回退模板文本；citations 不变，如实标注来源与原因。
-			generatedBy = "template"
-			send("delta", map[string]any{"text": ans.Answer})
-			send("notice", map[string]any{"fallback_reason": fmt.Sprint(err)})
+		send("delta", map[string]any{"text": visible})
+		if fallbackReason != "" {
+			send("notice", map[string]any{"fallback_reason": fallbackReason})
 		}
 		send("done", map[string]any{
 			"total_ms":     time.Since(start).Milliseconds(),

@@ -218,3 +218,33 @@ func TestTimingParaphraseKeepsDirectDuration(t *testing.T) {
 		t.Errorf("Answer(%q) = %+v, want cited seven-workday review period", query, ans)
 	}
 }
+
+func TestExactQuantityExceptionRequiresNamedRequirement(t *testing.T) {
+	raw := `---
+id: staffing-rule
+version: v1
+title: 场次人员要求
+effective_date: 2025-01-01
+---
+# 场次人员要求
+## 人数条件
+预计人数超过四十人的场次须增加一名现场疏导员。人数恰好四十人的场次不触发该附加要求。
+`
+	e := engineFromDocuments(t, raw)
+	for _, tc := range []struct {
+		query, wantStatus string
+	}{
+		{"人数恰好四十人需要疏导员吗", "answered"},
+		{"人数恰好四十人需要安全许可吗", "insufficient_evidence"},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			ans := e.Answer(tc.query, nil)
+			if ans.Status != tc.wantStatus {
+				t.Errorf("Answer(%q).Status = %q, want %q; citations = %+v", tc.query, ans.Status, tc.wantStatus, ans.Citations)
+			}
+			if tc.wantStatus == "answered" && (len(ans.Citations) != 1 || !strings.Contains(ans.Citations[0].Excerpt, "不触发该附加要求")) {
+				t.Errorf("Answer(%q).Citations = %+v, want only the exact exception", tc.query, ans.Citations)
+			}
+		})
+	}
+}

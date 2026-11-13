@@ -12,7 +12,7 @@
 
 需要 Go 1.25+；默认数据写入 `data/store.json`，离线问答无需 Python、模型或 API 密钥。向量实验使用 `github.com/jackc/pgx/v5` 连接 PostgreSQL/pgvector；默认问答仍可不连接数据库。首次使用建议指定全新数据目录，避免旧演示索引残留。
 
-模型配置样例见 [`.env.example`](.env.example)；真实密钥和 `RAGBOT_PG_DSN` 写入被 Git 忽略的 `.env`。`vector-sync`、`hybrid-search`、`hybrid-evaluate` 只读取 Embedding 的 `ENABLED=true`、`PROVIDER=remote_http`、`ENDPOINT_URL`（OpenAI 兼容 `/v1` 基地址或完整 `/embeddings` 地址）、`MODEL`、`API_KEY`、`TIMEOUT_SECONDS` 及 PostgreSQL DSN。Reranker 与 Generator 的配置仍是预留项，当前命令不会调用它们；普通 `ingest`、`ask`、`evaluate`、`serve` 也不加载 `.env`。
+模型配置样例见 [`.env.example`](.env.example)；真实密钥和 `RAGBOT_PG_DSN` 写入被 Git 忽略的 `.env`。`vector-sync`、`hybrid-search`、`hybrid-evaluate` 读取 Embedding 的 `ENABLED=true`、`PROVIDER=remote_http`、`ENDPOINT_URL`（OpenAI 兼容 `/v1` 基地址或完整 `/embeddings` 地址）、`MODEL`、`API_KEY`、`TIMEOUT_SECONDS` 及 PostgreSQL DSN。`serve` 从本机 `.env` 读取可选 Generator 配置，仅在离线引擎已判为 `answered` 时改写回答文字；校验失败回退原模板。Reranker 配置尚未接入。CLI 的 `ask`、`evaluate` 仍是离线路径。
 
 ```bash
 go run ./cmd/ragbot -data data/demo ingest docs
@@ -24,6 +24,8 @@ go test -count=1 ./...
 ```
 
 `serve` 默认在 `http://localhost:8080` 提供现有网页和 API。导入非规范资料可用 `go run ./cmd/ragbot -data data/demo -allow-unstructured ingest <目录>`；其来源会标为未认证。需要重新评测时，请清空或更换演示数据目录。
+
+网页的流式接口先接收完整模型响应并检查结束标记与部分机械事实，再一次性发送回答；断流或校验失败只显示模板。模型不能改动服务端确定的状态与引用。明显要求覆盖指令、读取密钥的用户输入会被拒答，含指令样式的引用不会送入模型。这些检查不能判断任意改写是否在语义上充分，也不是完整的提示注入防护。
 
 ## 可选向量检索实验
 
@@ -51,5 +53,7 @@ go run ./cmd/ragbot -data data/dense-demo hybrid-evaluate
 | 当前保留文件（含已参与修复的 H03） | **8/13** | 11/11 | 10/11 | 6/11 | 11/18 | 2/2 |
 
 **已知失败：**Q23 问星河工作坊报名费用，资料未记载，系统却引用入场券领取并误答（BUG-13）。Q03“盖什么章”没有引用实际写明公章的句子；Q06 漏掉安全许可条件，多题包含无关引用（BUG-10）。新稠密语料也复现“升级材料包多少钱”在无价格时被标为 `answered`，以及报名费、木工手续问题混入无关引用；这些发生在未接入 RRF 的离线 `ask` 路径，仍需单独修复。H13“最低年龄”命中正确资料后仍拒答（BUG-12）。H03“初审时限”曾用于修复并转入开发集，不能当作独立验证成功。旧口径下开发集 22/22、保留文件 12/13 是历史结果；新数字来自更严格的证据标注和新增负例，并非本次修改了问答策略。词表与阈值本轮未改，不能据此宣称真实业务准确率。
+
+2026-11-13 新增 [14 条现场回归题](eval/gate-regression.json)：在隔离目录导入旧 12 份与稠密 3 份虚构资料后，严格口径从 1/14 变为 **5/14**；Hit@5 8/9、必要证据合格 2/9、引用支持 4/20、正确拒答 3/5。“恰好四十人”仅在同节相邻规则明确写出人数与所问职责时走窄范围离线兜底；直接越权输入三题拒答。未来版本日期、跨主题经费、年龄句及多要件引用等仍失败。该数据集在实现过程中使用，不是独立保留集；旧 12 份资料单独复跑仍为开发集 13/23、保留文件 8/13。
 
 逐条结果、指标定义与复现步骤见 [评测结果](eval/RESULTS.md)；完整快照在 `eval/baseline/offline-evidence-*.json`。本地工作记录保存在被 Git 忽略的 `project-notes/`。

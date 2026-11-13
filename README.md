@@ -12,7 +12,7 @@
 
 需要 Go 1.25+；默认数据写入 `data/store.json`，离线问答无需 Python、模型或 API 密钥。向量实验使用 `github.com/jackc/pgx/v5` 连接 PostgreSQL/pgvector；默认问答仍可不连接数据库。首次使用建议指定全新数据目录，避免旧演示索引残留。
 
-模型配置样例见 [`.env.example`](.env.example)；真实密钥和 `RAGBOT_PG_DSN` 写入被 Git 忽略的 `.env`。`vector-sync`、`hybrid-search`、`hybrid-evaluate` 读取 Embedding 的 `ENABLED=true`、`PROVIDER=remote_http`、`ENDPOINT_URL`（OpenAI 兼容 `/v1` 基地址或完整 `/embeddings` 地址）、`MODEL`、`API_KEY`、`TIMEOUT_SECONDS` 及 PostgreSQL DSN。`serve` 从本机 `.env` 读取可选 Generator 配置，仅在离线引擎已判为 `answered` 时改写回答文字；校验失败回退原模板。Reranker 配置尚未接入。CLI 的 `ask`、`evaluate` 仍是离线路径。
+模型配置样例见 [`.env.example`](.env.example)；真实密钥和 `RAGBOT_PG_DSN` 写入被 Git 忽略的 `.env`。`vector-sync`、`hybrid-search`、`hybrid-evaluate` 读取 Embedding 的 `ENABLED=true`、`PROVIDER=remote_http`、`ENDPOINT_URL`（OpenAI 兼容 `/v1` 基地址或完整 `/embeddings` 地址）、`MODEL`、`API_KEY`、`TIMEOUT_SECONDS` 及 PostgreSQL DSN。`serve` 从本机 `.env` 读取可选 Generator 配置，仅在离线引擎已判为 `answered` 时改写回答文字；校验失败回退原模板。Reranker 配置尚未接入。CLI 的 `ask`、`evaluate` 仍是离线路径。全部 CLI 能力：`ingest`（导入，含 `docs-dense/` 稠密语料）、`ask`（`-as-of`/`-scope-key` 可选）、`evaluate`（开发集 30 条 + 保留集）、`search`（检索排序调试）、`acceptance`（27 个确定性验收场景套件，临时库对真实语料运行，退出码非零即回归）、`serve`（HTTP + 前端）、`vector-sync`/`hybrid-search`/`hybrid-evaluate`（可选向量对照）。
 
 ```bash
 go run ./cmd/ragbot -data data/demo ingest docs

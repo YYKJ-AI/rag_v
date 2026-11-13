@@ -193,6 +193,7 @@ func Handler(d Deps) http.Handler {
 						Status: "insufficient_evidence",
 						Answer: "语义判定层复核后认为候选证据不支持所问事项（已记录 judge_miss 待归因），无法给出有出处的回答。",
 					}
+					visible = ans.Answer // 同步清除旧模板正文，避免拒答携带疑似误答内容
 					failureClass = "judge_miss"
 					fallbackReason = "生成模型判定证据不支持所问事项，已转为拒答"
 				} else if err != nil {

@@ -86,3 +86,22 @@ func TestAskStreamDoesNotSendInstructionBearingEvidenceToModel(t *testing.T) {
 		t.Errorf("askStream(instruction evidence) = %s, upstream calls = %d; want template without model call", out, got)
 	}
 }
+
+func TestAskStreamStatusChangeBecomesRefusalNotTemplate(t *testing.T) {
+	// 模型改写称"无法确定"→ 状态篡改 → judge_miss：应转为拒答且不回退模板
+	stream := "data: {\"choices\":[{\"delta\":{\"content\":\"无法确定申请费用，证据未涵盖。\"}}]}\n\ndata: [DONE]\n\n"
+	h, _ := guardedStreamFixture(t, "申请费用为一百元。", stream)
+	out := askStream(t, h, "申请费用是多少")
+	if !strings.Contains(out, `"status":"insufficient_evidence"`) {
+		t.Errorf("judge_miss 应转为拒答: %s", out)
+	}
+	if strings.Contains(out, `"citations":[{`) {
+		t.Errorf("拒答不得携带引用: %s", out)
+	}
+	if !strings.Contains(out, `"failure_class":"judge_miss"`) {
+		t.Errorf("应标注 failure_class=judge_miss: %s", out)
+	}
+	if strings.Contains(out, "根据资料") {
+		t.Errorf("拒答不得携带模板正文: %s", out)
+	}
+}

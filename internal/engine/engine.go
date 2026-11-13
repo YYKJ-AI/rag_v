@@ -706,13 +706,24 @@ func isModalQuestion(q string) bool {
 	return false
 }
 
-// hasModalVerdict 证据中是否存在许可/禁止性表述（"须"不算——它不回答允许与否）
+// hasModalVerdict 证据中是否存在许可/禁止性表述（"须"不算——它不回答允许与否）。
+// 词表为回退层（模型不可用时的兜底），只收录"否定宾语明示"的表述；
+// "不触发/不代表"类指代式否定（"该附加要求"）不入表——否定对象未指名时
+// 放行会造成 BUG-13 式误答（由条件例外与指针机制单独处理）。
+// 否定+动词用有界模式匹配（否定词+≤4字修饰+动词），覆盖"不对外开放/暂停受理"族
+// ——逐词枚举会被修饰语隔断（"不对外开放"不含连续子串"不开放"）。
+var negatedOpenVerbs = regexp.MustCompile(`(?:不|未|无法|停止|暂停)(?:对外|对公众|对居民|一律)?(?:开放|受理|办理|接受)`)
+
 func hasModalVerdict(evids []evidence) bool {
 	for _, ev := range evids {
-		for _, m := range []string{"可以", "不得", "禁止", "允许", "不可", "无需", "无须", "免于", "免收", "免除", "退还"} {
+		for _, m := range []string{"可以", "不得", "禁止", "允许", "不可", "无需", "无须", "免于", "免收", "免除", "退还",
+			"不需要", "不能", "不是"} {
 			if strings.Contains(ev.Sentence, m) {
 				return true
 			}
+		}
+		if negatedOpenVerbs.MatchString(ev.Sentence) {
+			return true
 		}
 	}
 	return false

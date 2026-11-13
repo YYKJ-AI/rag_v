@@ -75,3 +75,19 @@ func TestAnswerWithScopeSubKeepsDeterminism(t *testing.T) {
 		t.Errorf("与原问题相同的子问题不应改变结果:\nA=%s\nB=%s", a.Answer, b.Answer)
 	}
 }
+
+// TestModalNegationFamily 否定判定族回退词表：是非问句的证据含"不开放"等否定表述时应放行
+// （UI 实测"咨询窗口法定节假日开放吗"因词表缺"不开放"被误拒）。
+func TestModalNegationFamily(t *testing.T) {
+	date := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	sec := &types.Section{ID: "consult@v1#s1", DocID: "consult", Version: "v1", SectionPath: "服务时间",
+		Text: "现场咨询窗口设于社区服务中心一楼大厅，工作日九时至十七时开放，法定节假日不对外开放。"}
+	r := retriever.New()
+	r.Index([]*types.Document{{ID: "consult", Version: "v1", Title: "咨询窗口安排", EffectiveDate: date}},
+		[]*types.Section{sec}, []*types.Chunk{{ID: "consult@v1#c1", SectionID: sec.ID, Text: sec.Text}})
+	e := engine.New(r)
+	ans := e.AnswerWithScope("咨询窗口法定节假日开放吗", nil, "")
+	if ans.Status != "answered" {
+		t.Errorf("含'不对外开放'的是非问应回答，实际 %s: %s", ans.Status, ans.Answer)
+	}
+}

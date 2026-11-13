@@ -271,6 +271,7 @@ const preprocessSystem = "你是知识库检索的查询预处理助手。任务
 	"3) sub_queries 把复合问题拆成最多 4 个各自可独立检索的子问题；单一简单问题输出一条与原问题同义的即可；" +
 	"4) time 仅当问题明确包含日期/年份时输出 YYYY-MM-DD，并同时给出 time_precision：" +
 		"完整日期→day（time 如 2026-03-15）；某年某月→month（time 如 2025-08-01）；仅年份→year（time 如 2025-01-01，表示该年全年口径）；两者都无则 time 留空；" +
+		"相对时间表达（去年/上一年→year；上个月/本月→month）必须以用户消息中给出的今天日期为基准换算，不得凭记忆猜测年份；" +
 	"5) rewritten 是去口语化的同义改写，不得改变含义，拿不准就与原问题相同；" +
 	"6) 只输出 JSON：{\"rewritten\":\"...\",\"entities\":[],\"sub_queries\":[],\"time\":\"\"}，不要输出任何解释。"
 
@@ -285,7 +286,7 @@ func (g *Gateway) PreprocessQuery(ctx context.Context, query string) (QueryPlan,
 		"stream": false,
 		"messages": []map[string]string{
 			{"role": "system", "content": preprocessSystem},
-			{"role": "user", "content": "用户问题：" + query},
+			{"role": "user", "content": fmt.Sprintf("今天日期：%s\n\n用户问题：%s", time.Now().Format("2006-01-02"), query)},
 		},
 	}
 	body, err := json.Marshal(payload)

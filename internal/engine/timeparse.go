@@ -64,3 +64,8 @@ func parseYMD(ys, ms, ds string) *time.Time {
 	}
 	return &t
 }
+
+// InferQueryTime 导出版时间推断（正则优先路径）：查询含确定性时间表达时
+// 返回业务锚点（期末含全期约定），供服务端优先于模型提取使用——
+// 模型在相对时间上已两次实测翻车（猜错年份/精度），确定性解析覆盖的表达式不交给模型。
+func InferQueryTime(query string) *time.Time { return inferQueryTime(query) }

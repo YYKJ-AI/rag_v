@@ -1,6 +1,7 @@
 package generator_test
 
 import (
+	"io"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -126,5 +127,26 @@ func TestPreprocessQueryKeepsPrecision(t *testing.T) {
 	plan2, err := g2.PreprocessQuery(context.Background(), "测试")
 	if err != nil || plan2.TimePrec != "" {
 		t.Errorf("非法精度应置空: %+v err=%v", plan2, err)
+	}
+}
+
+func TestPreprocessGroundsTodayDate(t *testing.T) {
+	// 上游校验：预处理请求必须携带"今天日期"基准（相对时间词换算依据，UI 实测"去年"曾被猜错年份）
+	var sawDate bool
+	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "今天日期：") {
+			sawDate = true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]string{
+				"content": `{"rewritten":"","entities":[],"sub_queries":["去年初审要多少个工作日"],"time":"","time_precision":""}`}}}})
+	})
+	if _, err := g.PreprocessQuery(context.Background(), "去年初审要多少个工作日"); err != nil {
+		t.Fatalf("PreprocessQuery: %v", err)
+	}
+	if !sawDate {
+		t.Error("预处理请求未携带今天日期基准")
 	}
 }

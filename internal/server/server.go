@@ -261,13 +261,18 @@ func Handler(d Deps) http.Handler {
 			pcancel()
 			if perr == nil {
 				plan = planInfo{Source: "model", Entities: p.Entities, SubQueries: p.SubQueries, Time: p.Time, TimePrec: p.TimePrec}
-				// 模型提取的时间点按精度换算锚点（年→年末、月→月末，与引擎正则约定一致），
-				// 避免"2025年"被钉死在 1 月 1 日（彼时 v1 尚未生效）而误拒；未提取时由引擎正则兜底。
-				if req.AsOf == "" && p.Time != "" {
-					if t, terr := time.Parse("2006-01-02", p.Time); terr == nil {
-						anchor := generator.AnchorTime(t, p.TimePrec)
-						asOf = &anchor
-					}
+			}
+		}
+		// 时间锚点裁决（确定性优先）：正则能解析的表达式（去年/年份/年月/完整日期）
+		// 一律用正则结果——模型在相对时间上已两次实测翻车（猜错年份/精度）；
+		// 仅当正则解析不出时才采用模型提取（按精度换算锚点），覆盖"上个月"类模糊表达。
+		if req.AsOf == "" {
+			if rt := engine.InferQueryTime(req.Query); rt != nil {
+				asOf = rt
+			} else if plan.Source == "model" && plan.Time != "" {
+				if t, terr := time.Parse("2006-01-02", plan.Time); terr == nil {
+					anchor := generator.AnchorTime(t, plan.TimePrec)
+					asOf = &anchor
 				}
 			}
 		}

@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -55,5 +56,36 @@ func TestYearPrecisionAnswersAcrossEffectiveDate(t *testing.T) {
 	}
 	if requests != 2 {
 		t.Errorf("upstream calls = %d, want 2（预处理+改写）", requests)
+	}
+}
+
+// TestRegexPrecedenceOverModelTime 确定性优先回归：模型把"去年"错标成
+// 2024-01-01/month（UI 实测翻车），正则应优先给出 2025-12-31 → v1 十个工作日。
+func TestRegexPrecedenceOverModelTime(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 8192))
+		if strings.Contains(string(body), `"stream":false`) {
+			w.Header().Set("Content-Type", "application/json")
+			// 模型故意给错：去年→2024-01-01/month（正确应为 2025 全年）
+			_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{\"rewritten\":\"\",\"entities\":[],\"sub_queries\":[\"去年初审要多少个工作日\"],\"time\":\"2024-01-01\",\"time_precision\":\"month\"}"}}]}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"街道办事处在收到完整材料后十个工作日内完成初审。\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer upstream.Close()
+
+	date := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	sec := &types.Section{ID: "guide@v1#s1", DocID: "guide", Version: "v1", SectionPath: "审批流程",
+		Text: "街道办事处在收到完整材料后十个工作日内完成初审，初审通过后进入公示。"}
+	r := retriever.New()
+	r.Index([]*types.Document{{ID: "guide", Version: "v1", Title: "申请指南", EffectiveDate: date}},
+		[]*types.Section{sec}, []*types.Chunk{{ID: "guide@v1#c1", SectionID: sec.ID, Text: sec.Text}})
+	g := generator.NewGateway(generator.Config{Enabled: true, BaseURL: upstream.URL, Model: "fake", Timeout: 3 * time.Second})
+	h := server.Handler(server.Deps{Engine: engine.New(r), Ret: r, Generator: g})
+
+	out := askStream(t, h, "去年初审要多少个工作日")
+	if !strings.Contains(out, `"status":"answered"`) || !strings.Contains(out, "十个工作日") {
+		t.Errorf("正则时间应优先于模型的错误提取: %s", out)
 	}
 }

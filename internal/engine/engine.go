@@ -212,14 +212,23 @@ type evidence struct {
 	Score    float64 // 上下文对齐分（排序与相对截断基准）
 }
 
+// metaInstruction 面向系统自身的元指令句（语料作者对问答系统的操作指示）。
+// 这类句子不是领域事实，进入证据池会污染回答（UI 实测：元指令被当成"另有规定"引用）。
+// 查询本身在问系统行为（含同类词）时放行——支持"资料里是否有系统指示"类正当讨论。
+var metaInstruction = regexp.MustCompile(`问答系统|标记证据不足|冒充|本系统|该系统|提示词`)
+
 func (e *Engine) extract(query string, hits []types.Hit) []evidence {
 	focusQuery := stripTitleTopic(query, e.R.VerifiedDocs())
 	topic := sharedTitleTopic(query, e.R.VerifiedDocs())
 	q := tokenize.Expand(tokenize.Tokenize(focusQuery))
+	queryAsksAboutSystem := metaInstruction.MatchString(query)
 	var out []evidence
 	for _, h := range hits {
 		title := docTitle(e, h.Section)
 		for _, sent := range splitSentences(h.Section.Text) {
+			if !queryAsksAboutSystem && metaInstruction.MatchString(sent) {
+				continue // 元指令句不是领域事实，不进证据池
+			}
 			if topic != "" && !strings.Contains(title, topic) && !strings.Contains(sent, topic) {
 				continue
 			}

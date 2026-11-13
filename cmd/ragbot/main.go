@@ -123,6 +123,9 @@ func main() {
 			}
 			fmt.Printf("%d. %.3f  %s@%s  %s%s\n", i+1, h.Score, h.Section.DocID, h.Section.Version, h.Section.SectionPath, status)
 		}
+	case "acceptance":
+		fixture := "eval/fixtures/upload-ok-咨询窗口安排.md"
+		os.Exit(runAcceptance([]string{*docsDir, "docs-dense"}, fixture))
 	case "evaluate":
 		qs, err := evaluate.LoadQueries(*queries)
 		if err != nil {

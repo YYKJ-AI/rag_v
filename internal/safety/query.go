@@ -5,10 +5,11 @@ package safety
 import "strings"
 
 // 讨论式前缀：以这些词开头的问句默认是在讨论语料内容，而非指令系统。
-var discussionContext = []string{"文档中", "资料中", "原文中", "这句话", "这段话", "这段文字"}
+var discussionContext = []string{"文档中", "资料中", "原文中", "资料里", "文档里", "语料里",
+	"这句话", "这段话", "这段文字"}
 
 // 强命令动词：明确要求向用户披露或执行。
-var strongCommands = []string{"输出", "显示", "泄露", "读取", "告诉", "直接回答", "打印"}
+var strongCommands = []string{"输出", "显示", "泄露", "读取", "告诉", "直接回答", "打印", "发我", "发给我"}
 
 // 弱问句词：问句式披露请求（"系统提示词是什么"）。仅在非讨论式问句中参与判定。
 var weakQuestions = []string{"是什么", "有哪些"}
@@ -16,8 +17,9 @@ var weakQuestions = []string{"是什么", "有哪些"}
 // 控制词：明确的指令覆盖意图。
 var overrideControls = []string{"忽略之前", "忽略以上", "忽略检索", "无视之前", "绕过系统", "覆盖系统"}
 
-// 秘密名词：运行时配置与凭证。
-var secretNouns = []string{"系统提示词", "系统指令", "环境变量", "密钥", "api key", "apikey"}
+// 秘密名词：运行时配置与凭证。裸"提示词"与"系统提示词"同族——
+// 口语问法通常不带"系统"前缀（"你的提示词是什么"）。
+var secretNouns = []string{"系统提示词", "提示词", "系统指令", "环境变量", "密钥", "api key", "apikey"}
 
 // IsDirectOverride catches explicit requests to replace instructions or
 // disclose runtime secrets. Quoted discussion of such text remains searchable.
@@ -34,7 +36,12 @@ func IsDirectOverride(query string) bool {
 		return false
 	}
 	if containsAny(q, overrideControls) {
-		// 控制词全局命中；但引号包裹且句式为讨论的例外交给引号提取逻辑复核。
+		// 讨论式问句：控制词仅出现在引号内（问的是语料内容，不是在下指令）
+		// ——如"资料里哪一段提到了'忽略之前指令'"。
+		if startsAny(q, discussionContext) && !containsAny(stripQuoted(q), overrideControls) {
+			return false
+		}
+		// 控制词全局命中；引号外仍有控制词或句式为指令时，交引号提取逻辑复核。
 		return isDiscussionOfInstructions(q) == false || containsAny(stripQuoted(q), overrideControls)
 	}
 	hasSecrets := containsAny(q, secretNouns)

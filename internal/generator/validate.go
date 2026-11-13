@@ -34,10 +34,16 @@ func (g *Gateway) ValidateRewrite(baseAnswer string, evidence []string, output s
 			return fmt.Errorf("模型表述改变了回答状态")
 		}
 	}
-	facts := baseAnswer + "\n" + strings.Join(evidence, "\n")
+	evidenceText := strings.Join(evidence, "\n")
+	if strings.TrimSpace(evidenceText) == "" {
+		return fmt.Errorf("模型表述缺少可核验的引用原文")
+	}
+	facts := baseAnswer + "\n" + evidenceText
 	checkText := listOrdinal.ReplaceAllString(output, "")
 	for _, pattern := range []*regexp.Regexp{arabicNumber, chineseQuantity} {
-		for _, token := range pattern.FindAllString(baseAnswer, -1) {
+		// Version numbers in the template header remain in immutable citations.
+		// Only quantities in the cited source text must survive the rewrite.
+		for _, token := range pattern.FindAllString(evidenceText, -1) {
 			if !strings.Contains(output, token) {
 				return fmt.Errorf("模型表述删除了既有回答的数字或数量")
 			}

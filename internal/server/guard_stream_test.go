@@ -45,13 +45,13 @@ func askStream(t *testing.T, h http.Handler, query string) string {
 }
 
 func TestAskStreamPublishesOneValidatedAnswer(t *testing.T) {
-	stream := "data: {\"choices\":[{\"delta\":{\"content\":\"《申请费用》v1：\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"费用为一百元。\"}}]}\n\ndata: [DONE]\n\n"
+	stream := "data: {\"choices\":[{\"delta\":{\"content\":\"费用为\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"一百元。\"}}]}\n\ndata: [DONE]\n\n"
 	h, requests := guardedStreamFixture(t, "申请费用为一百元。", stream)
 	out := askStream(t, h, "申请费用是多少")
 	if got := requests.Load(); got != 1 {
 		t.Errorf("askStream(valid) upstream calls = %d, want 1", got)
 	}
-	if strings.Count(out, "event: delta") != 1 || strings.Count(out, `"generated_by":"llm"`) != 2 || !strings.Contains(out, `"text":"《申请费用》v1：费用为一百元。"`) {
+	if strings.Count(out, "event: delta") != 1 || strings.Count(out, `"generated_by":"llm"`) != 2 || !strings.Contains(out, `"text":"费用为一百元。"`) || !strings.Contains(out, `"version":"v1"`) {
 		t.Errorf("askStream(valid) = %s, want one validated answer and matching meta/done", out)
 	}
 }

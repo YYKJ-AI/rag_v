@@ -73,3 +73,10 @@ func TestValidateRewriteRejectsUnsupportedMechanicalFacts(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRewriteRequiresEvidence(t *testing.T) {
+	g := generator.NewGateway(generator.Config{})
+	if err := g.ValidateRewrite("费用为一百元。", nil, "费用为一百元。"); err == nil {
+		t.Error("ValidateRewrite(without evidence) error = nil, want refusal")
+	}
+}

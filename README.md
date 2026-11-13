@@ -43,6 +43,18 @@ go run ./cmd/ragbot -data data/dense-demo hybrid-evaluate
 
 2026-11-12 在隔离目录实际导入 3 份稠密虚构资料（12 节、28 子块），同步首次写入 28 行、再次写入 0 行；8 条人工标注检索题的目标节 Hit@5：首次 BM25 8/8、pgvector 7/8、RRF 8/8，复跑为 8/8、8/8、8/8。D07 的目标节明确说资料没有价格，因此命中该节仍须拒答；不同运行的向量排序也有波动。这是本地小测试床的检索结果，不代表回答支持率或真实资料泛化能力。云端模型与数据库不可用时，向量命令报错；离线问答命令仍可运行。
 
+## 可选语义判定旁路
+
+`semantic-shadow` 从已认证、按业务时间筛选的 BM25 前 N 个节导出完整候选句，绕开当前问答的句子对齐阈值；它只写逐题报告，**不会改变 `ask` 的回答、状态或引用**。先用 `-shadow-candidates-only` 审计候选是否含必要证据；调用模型时复用 `.env` 中已启用的 Generator OpenAI 兼容配置，仅将虚构资料送给获准使用的接口。无配置或判定失败会报错，报告中保留失败题；无模型的导入、问答和评测照常可用。
+
+```bash
+go run ./cmd/ragbot -data data/demo ingest docs-dense
+go run ./cmd/ragbot -data data/demo -queries eval/gate-regression.json -shadow-pool 8 -shadow-candidates-only semantic-shadow
+go run ./cmd/ragbot -data data/demo -queries eval/gate-regression.json -shadow-pool 8 semantic-shadow
+```
+
+开发、保留和现场集须分开运行并指定不同的 `-shadow-report` 路径，否则默认报告会被覆盖。旁路当前只使用问句内时间和默认未指定适用范围；传入 `-as-of` 或 `-scope-key` 会明确报错。模型只可选择报告中已有的候选 ID；报告分别记录候选缺失、必要证据组覆盖、引用支持、无证据题误答、证据不合格的回答、安全拦截和模型失败。单次结果不能证明模型可靠；RRF 与 Reranker 仍未接入普通问答。
+
 ## 实测结果与已知边界
 
 2026-11-12 在全新目录导入 12/12 份虚构资料并重新运行两套问题；`go test -count=1 ./...` 和 `go vet ./...` 均通过。新口径给每条有答案的问题标注必要证据片段，逐条检查引用是否属于人工确认的支持证据；旧口径只检查来源及摘录可定位。

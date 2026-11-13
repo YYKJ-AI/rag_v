@@ -24,6 +24,7 @@ import (
 	"ragbot/internal/remoteembed"
 	"ragbot/internal/retriever"
 	"ragbot/internal/server"
+	"ragbot/internal/shadow"
 	"ragbot/internal/store"
 	"ragbot/internal/types"
 	"ragbot/internal/vectorstore"
@@ -43,6 +44,10 @@ func main() {
 	envFile := flag.String("env", ".env", "向量实验的本机环境文件")
 	collectionFlag := flag.String("collection", "", "pgvector collection（默认按数据目录隔离）")
 	pool := flag.Int("pool", 20, "混合检索每路候选节数")
+	shadowPool := flag.Int("shadow-pool", 20, "语义旁路的固定候选节数")
+	shadowIDs := flag.String("shadow-ids", "", "语义旁路只运行指定查询 ID（逗号分隔）")
+	shadowCandidatesOnly := flag.Bool("shadow-candidates-only", false, "仅审计候选池，不调用模型")
+	shadowReport := flag.String("shadow-report", "", "语义旁路逐题报告路径（默认 data 目录下）")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
@@ -122,6 +127,49 @@ func main() {
 			die(err)
 		}
 		printReport(rep)
+	case "semantic-shadow":
+		if *scopeKey != "" || *asOfStr != "" {
+			die(fmt.Errorf("semantic-shadow 当前只支持评测集中的问句时间与默认适用范围；不可传 -as-of 或 -scope-key"))
+		}
+		if *shadowPool < 1 || *shadowPool > 50 {
+			die(fmt.Errorf("shadow-pool 必须为 1–50"))
+		}
+		qs, err := evaluate.LoadQueries(*queries)
+		if err != nil {
+			die(err)
+		}
+		qs, err = selectShadowQueries(qs, *shadowIDs)
+		if err != nil {
+			die(err)
+		}
+		var judge shadow.Judge
+		if !*shadowCandidatesOnly {
+			judge, err = shadow.NewRemoteJudge(generator.LoadConfigFromPath(*envFile))
+			if err != nil {
+				die(err)
+			}
+		}
+		rep := shadow.Run(context.Background(), newEngine(ret), qs, *shadowPool, judge)
+		path := *shadowReport
+		if path == "" {
+			path = filepath.Join(*dataDir, "shadow-report.json")
+		}
+		if err := rep.Save(path); err != nil {
+			die(err)
+		}
+		if *shadowCandidatesOnly {
+			fmt.Printf("语义旁路候选审计：候选组 %d/%d，必要句入池 %d/%d；未调用模型；报告 %s\n",
+				rep.CandidateGroups, rep.CandidateGroupTotal, rep.PoolEvidence, rep.RequiredEvidence, path)
+		} else {
+			fmt.Printf("语义旁路（不改变 ask）：候选组 %d/%d，必要句入池 %d/%d；有效判定 %d，模型失败 %d，完整回答 %d/%d，风险回答 %d（缺证据题判充分 %d，有答案题证据不合格 %d），正确拒答 %d/%d（另有安全拦截 %d、无候选 %d）；报告 %s\n",
+				rep.CandidateGroups, rep.CandidateGroupTotal, rep.PoolEvidence, rep.RequiredEvidence,
+				rep.ValidJudgments, rep.JudgeErrors, rep.CompleteAnswers, rep.Answerable,
+				rep.UnsafeAnswers, rep.FalseAnswers, rep.UnsupportedAnswers,
+				rep.CorrectRefusals, rep.RefusalJudged, rep.SafetyBlocked, rep.NoCandidates, path)
+		}
+		if rep.JudgeErrors > 0 {
+			die(fmt.Errorf("%d 条语义判定失败；逐题报告已保存", rep.JudgeErrors))
+		}
 	case "vector-sync":
 		svc, collection, err := newHybridService(*envFile, *dataDir, *collectionFlag, ret)
 		if err != nil {
@@ -167,6 +215,7 @@ func main() {
   ragbot ingest [目录]            导入 Markdown 文档（默认 docs/）
   ragbot -as-of 日期 -scope-key 键 ask "问题"  按时间和适用范围提问（参数可省略）
   ragbot evaluate                 运行评测集，输出指标与逐条结果
+  ragbot semantic-shadow          旁路审计候选池与可选模型判定（不改变 ask）
   ragbot vector-sync              生成子块向量并幂等写入 pgvector
   ragbot hybrid-search "问题"       对照 BM25、pgvector 与 RRF 排名
   ragbot hybrid-evaluate          按 eval/dense-retrieval.json 检索召回对照
@@ -177,6 +226,31 @@ func main() {
   -queries 文件 评测查询集（默认 eval/queries.json）
   -scope-key 键  仅使用标注该适用范围键或 * 的文档`)
 	}
+}
+
+func selectShadowQueries(cases []evaluate.TestCase, rawIDs string) ([]evaluate.TestCase, error) {
+	if strings.TrimSpace(rawIDs) == "" {
+		return cases, nil
+	}
+	wanted := map[string]bool{}
+	for _, id := range strings.Split(rawIDs, ",") {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return nil, fmt.Errorf("shadow-ids 含空 ID")
+		}
+		wanted[id] = true
+	}
+	var selected []evaluate.TestCase
+	for _, tc := range cases {
+		if wanted[tc.ID] {
+			selected = append(selected, tc)
+			delete(wanted, tc.ID)
+		}
+	}
+	if len(wanted) > 0 {
+		return nil, fmt.Errorf("shadow-ids 包含评测集中不存在的 ID")
+	}
+	return selected, nil
 }
 
 func newHybridService(envFile, dataDir, collection string, ret *retriever.Retriever) (*hybrid.Service, string, error) {

@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"ragbot/internal/generator"
 	"ragbot/internal/retriever"
 	"ragbot/internal/safety"
+	"ragbot/internal/types"
 )
 
 // Deps 服务依赖（main 组装后注入）
@@ -160,6 +162,7 @@ func Handler(d Deps) http.Handler {
 
 		visible := ans.Answer
 		generatedBy := "template"
+		failureClass := "" // render_fallback=生成层失败降级 / judge_miss=判定层漏判信号 / 空=无降级
 		var fallbackReason string
 		// 拒答和冲突不调用模型；完整模型输出验证通过后才能到达客户端。
 		if ans.Status == "answered" && d.Generator != nil {
@@ -183,8 +186,18 @@ func Handler(d Deps) http.Handler {
 				if err == nil {
 					err = d.Generator.ValidateRewrite(ans.Answer, evidence, llmText)
 				}
-				if err != nil {
+				if err != nil && errors.Is(err, generator.ErrStatusChanged) {
+					// 模型认为证据不支持所问事项——判定层漏判信号（judge_miss）。
+					// 不得回退到疑似误答的模板：转为拒答并记录，进评测集归因。
+					ans = types.Answer{
+						Status: "insufficient_evidence",
+						Answer: "语义判定层复核后认为候选证据不支持所问事项（已记录 judge_miss 待归因），无法给出有出处的回答。",
+					}
+					failureClass = "judge_miss"
+					fallbackReason = "生成模型判定证据不支持所问事项，已转为拒答"
+				} else if err != nil {
 					fallbackReason = "模型请求或表述校验失败"
+					failureClass = "render_fallback"
 				} else {
 					visible = llmText
 					generatedBy = "llm"
@@ -196,6 +209,7 @@ func Handler(d Deps) http.Handler {
 			"latency_ms":   time.Since(start).Milliseconds(),
 			"detected":     asOf == nil && engine.QueryHasInferredTime(req.Query),
 			"generated_by": generatedBy,
+			"failure_class": failureClass,
 		})
 		send("delta", map[string]any{"text": visible})
 		if fallbackReason != "" {
@@ -204,6 +218,7 @@ func Handler(d Deps) http.Handler {
 		send("done", map[string]any{
 			"total_ms":     time.Since(start).Milliseconds(),
 			"generated_by": generatedBy,
+			"failure_class": failureClass,
 		})
 	})
 

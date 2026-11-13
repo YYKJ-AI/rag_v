@@ -8,12 +8,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 )
+
+// ErrStatusChanged 模型改写把"可回答"改成了"无法回答"——语义判定层的漏判信号
+// （判定层放行的证据被生成模型认为不支持所问事项）。调用方据此转为拒答并记录
+// judge_miss，不得静默回退模板掩盖。
+var ErrStatusChanged = errors.New("模型表述改变了回答状态")
 
 // Config Generator 配置（从 .env / 环境变量加载）
 type Config struct {

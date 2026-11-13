@@ -32,7 +32,7 @@ func (g *Gateway) ValidateRewrite(baseAnswer string, evidence []string, output s
 	}
 	for _, refusal := range []string{"证据不足", "无法回答", "无法确定", "无法给出有出处的回答"} {
 		if strings.Contains(output, refusal) && !strings.Contains(baseAnswer, refusal) {
-			return fmt.Errorf("模型表述改变了回答状态")
+			return fmt.Errorf("%w（judge_miss 信号）", ErrStatusChanged)
 		}
 	}
 	evidenceText := strings.Join(evidence, "\n")

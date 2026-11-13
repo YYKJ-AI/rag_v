@@ -252,6 +252,7 @@ func Handler(d Deps) http.Handler {
 			Entities   []string `json:"entities,omitempty"`
 			SubQueries []string `json:"sub_queries,omitempty"`
 			Time       string   `json:"time,omitempty"`
+			TimePrec   string   `json:"time_precision,omitempty"` // day / month / year
 		}
 		plan := planInfo{Source: "offline"}
 		if d.Generator != nil && d.Generator.Enabled() && !safety.IsDirectOverride(req.Query) {
@@ -259,11 +260,13 @@ func Handler(d Deps) http.Handler {
 			p, perr := d.Generator.PreprocessQuery(pctx, req.Query)
 			pcancel()
 			if perr == nil {
-				plan = planInfo{Source: "model", Entities: p.Entities, SubQueries: p.SubQueries, Time: p.Time}
-				// 模型提取的时间点优先（合法日期已由 generator 校验），未提取时由引擎正则兜底。
+				plan = planInfo{Source: "model", Entities: p.Entities, SubQueries: p.SubQueries, Time: p.Time, TimePrec: p.TimePrec}
+				// 模型提取的时间点按精度换算锚点（年→年末、月→月末，与引擎正则约定一致），
+				// 避免"2025年"被钉死在 1 月 1 日（彼时 v1 尚未生效）而误拒；未提取时由引擎正则兜底。
 				if req.AsOf == "" && p.Time != "" {
 					if t, terr := time.Parse("2006-01-02", p.Time); terr == nil {
-						asOf = &t
+						anchor := generator.AnchorTime(t, p.TimePrec)
+						asOf = &anchor
 					}
 				}
 			}

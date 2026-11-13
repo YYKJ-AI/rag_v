@@ -261,14 +261,16 @@ type QueryPlan struct {
 	Rewritten  string   `json:"rewritten"`
 	Entities   []string `json:"entities"`
 	SubQueries []string `json:"sub_queries"`
-	Time       string   `json:"time"` // YYYY-MM-DD 或空
+	Time       string   `json:"time"`           // YYYY-MM-DD 或空
+	TimePrec   string   `json:"time_precision"` // day / month / year（年份=全年、月份=全月口径）
 }
 
 const preprocessSystem = "你是知识库检索的查询预处理助手。任务：对用户问题做轻度改写、实体抽取和子问题拆分。" +
 	"规则：1) 严格基于用户问题本身，禁止引入问题未提及的实体、活动名、机构、时间或主题；" +
 	"2) entities 抽取问题中出现的专名（活动/机构/场所/对象），没有则输出空数组；" +
 	"3) sub_queries 把复合问题拆成最多 4 个各自可独立检索的子问题；单一简单问题输出一条与原问题同义的即可；" +
-	"4) time 仅当问题明确包含日期或年份时输出（完整日期用 YYYY-MM-DD，仅年份用 YYYY-01-01），否则输出空字符串；" +
+	"4) time 仅当问题明确包含日期/年份时输出 YYYY-MM-DD，并同时给出 time_precision：" +
+		"完整日期→day（time 如 2026-03-15）；某年某月→month（time 如 2025-08-01）；仅年份→year（time 如 2025-01-01，表示该年全年口径）；两者都无则 time 留空；" +
 	"5) rewritten 是去口语化的同义改写，不得改变含义，拿不准就与原问题相同；" +
 	"6) 只输出 JSON：{\"rewritten\":\"...\",\"entities\":[],\"sub_queries\":[],\"time\":\"\"}，不要输出任何解释。"
 
@@ -353,11 +355,20 @@ func parseQueryPlan(content string) (QueryPlan, error) {
 	if len([]rune(plan.Rewritten)) > 120 || safety.IsDirectOverride(plan.Rewritten) {
 		plan.Rewritten = ""
 	}
-	// 时间：合法日期才放行，否则置空交正则兜底
+	// 时间：合法日期才放行，否则置空交正则兜底；精度仅接受 day/month/year
 	if plan.Time != "" {
 		if _, err := time.Parse("2006-01-02", plan.Time); err != nil {
 			plan.Time = ""
+			plan.TimePrec = ""
 		}
+	}
+	switch plan.TimePrec {
+	case "day", "month", "year":
+	default:
+		plan.TimePrec = ""
+	}
+	if plan.Time == "" {
+		plan.TimePrec = ""
 	}
 	if len(plan.SubQueries) == 0 {
 		return plan, errors.New("预处理未产出可用子问题")
@@ -387,4 +398,19 @@ func cleanList(items []string, maxCount, maxRunes int) []string {
 		}
 	}
 	return out
+}
+
+// AnchorTime 按时间精度换算业务日期锚点——与引擎正则推断的"期末含全期"约定一致：
+// year → 当年 12 月 31 日（该年任意时点有效的版本都参与裁决）；
+// month → 当月月末；day → 当日。空精度按 day 处理。
+// 这保证"2025年申请"不会被钉死在 1 月 1 日（彼时 v1 尚未生效）而误拒。
+func AnchorTime(t time.Time, precision string) time.Time {
+	switch precision {
+	case "year":
+		return time.Date(t.Year(), 12, 31, 0, 0, 0, 0, time.UTC)
+	case "month":
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, -1)
+	default:
+		return t
+	}
 }

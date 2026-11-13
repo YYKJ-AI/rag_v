@@ -447,7 +447,8 @@ async function ask() {
             const parts = [];
             if (plan.sub_queries && plan.sub_queries.length > 1) parts.push('拆解子问题：' + plan.sub_queries.join(' / '));
             if (plan.entities && plan.entities.length) parts.push('实体：' + plan.entities.join('、'));
-            if (plan.time) parts.push('时间点：' + plan.time);
+            if (plan.time) parts.push('时间点：' + plan.time +
+              (plan.time_precision === 'year' ? '（全年口径）' : plan.time_precision === 'month' ? '（全月口径）' : ''));
             pl.textContent = (parts.length ? '查询预处理 · ' : '查询预处理 · 直检') + parts.join(' ｜ ');
             stack.appendChild(pl);
           }

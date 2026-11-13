@@ -96,3 +96,35 @@ func TestValidateRewriteClassifiesFailures(t *testing.T) {
 		t.Errorf("状态篡改应保持 ErrStatusChanged: %v", err)
 	}
 }
+
+func TestAnchorTimePrecision(t *testing.T) {
+	d := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	if got := generator.AnchorTime(d, "year"); got.Format("2006-01-02") != "2025-12-31" {
+		t.Errorf("year 锚点 = %s, want 2025-12-31", got.Format("2006-01-02"))
+	}
+	if got := generator.AnchorTime(time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC), "month"); got.Format("2006-01-02") != "2025-08-31" {
+		t.Errorf("month 锚点 = %s, want 2025-08-31", got.Format("2006-01-02"))
+	}
+	if got := generator.AnchorTime(d, "day"); got.Format("2006-01-02") != "2025-01-01" {
+		t.Errorf("day 锚点 = %s, want 2025-01-01", got.Format("2006-01-02"))
+	}
+	if got := generator.AnchorTime(d, ""); got.Format("2006-01-02") != "2025-01-01" {
+		t.Errorf("空精度按 day: %s", got.Format("2006-01-02"))
+	}
+}
+
+func TestPreprocessQueryKeepsPrecision(t *testing.T) {
+	g := planGateway(t, `{"rewritten":"","entities":[],
+		"sub_queries":["2025年申请要准备几项材料"],"time":"2025-01-01","time_precision":"year"}`)
+	plan, err := g.PreprocessQuery(context.Background(), "2025年申请要准备几项材料")
+	if err != nil || plan.TimePrec != "year" {
+		t.Errorf("year 精度应保留: %+v err=%v", plan, err)
+	}
+	// 非法精度丢弃
+	g2 := planGateway(t, `{"rewritten":"","entities":[],
+		"sub_queries":["测试"],"time":"2025-01-01","time_precision":"week"}`)
+	plan2, err := g2.PreprocessQuery(context.Background(), "测试")
+	if err != nil || plan2.TimePrec != "" {
+		t.Errorf("非法精度应置空: %+v err=%v", plan2, err)
+	}
+}

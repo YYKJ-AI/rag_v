@@ -48,6 +48,10 @@ func main() {
 	shadowIDs := flag.String("shadow-ids", "", "语义旁路只运行指定查询 ID（逗号分隔）")
 	shadowCandidatesOnly := flag.Bool("shadow-candidates-only", false, "仅审计候选池，不调用模型")
 	shadowReport := flag.String("shadow-report", "", "语义旁路逐题报告路径（默认 data 目录下）")
+	shadowInput := flag.String("shadow-input", "", "原子协议对照的旧旁路报告路径，多个文件用逗号分隔")
+	shadowLabels := flag.String("shadow-labels", "eval/atomic-shadow.json", "原子要求开发锚点标注")
+	atomicComparison := flag.String("atomic-comparison", "", "原子要求人工复核使用的固定候选对照报告")
+	atomicReview := flag.String("atomic-review", "", "原子要求人工对齐文件")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
@@ -170,6 +174,86 @@ func main() {
 		if rep.JudgeErrors > 0 {
 			die(fmt.Errorf("%d 条语义判定失败；逐题报告已保存", rep.JudgeErrors))
 		}
+	case "atomic-shadow":
+		if *scopeKey != "" || *asOfStr != "" || *shadowIDs != "" {
+			die(fmt.Errorf("atomic-shadow 固定复放旧报告；不可传 -as-of、-scope-key 或 -shadow-ids"))
+		}
+		if strings.TrimSpace(*shadowInput) == "" {
+			die(fmt.Errorf("atomic-shadow 需要 -shadow-input 指定旧旁路报告"))
+		}
+		labels, err := shadow.LoadAtomicCases(*shadowLabels)
+		if err != nil {
+			die(err)
+		}
+		var reports []shadow.Report
+		var inputPaths []string
+		for _, path := range strings.Split(*shadowInput, ",") {
+			if strings.TrimSpace(path) == "" {
+				die(fmt.Errorf("shadow-input 含空路径"))
+			}
+			inputPaths = append(inputPaths, strings.TrimSpace(path))
+			report, loadErr := shadow.LoadShadowReport(strings.TrimSpace(path))
+			if loadErr != nil {
+				die(loadErr)
+			}
+			reports = append(reports, report)
+		}
+		var atomicJudge shadow.AtomicJudge
+		var modelName string
+		if !*shadowCandidatesOnly {
+			modelCfg := generator.LoadConfigFromPath(*envFile)
+			atomicJudge, err = shadow.NewRemoteJudge(modelCfg)
+			if err != nil {
+				die(err)
+			}
+			modelName = modelCfg.Model
+		}
+		comparison, err := shadow.CompareAtomic(context.Background(), reports, labels, atomicJudge)
+		if err != nil {
+			die(err)
+		}
+		comparison.InputReports = inputPaths
+		comparison.Model = modelName
+		path := *shadowReport
+		if path == "" {
+			path = filepath.Join(*dataDir, "atomic-shadow-report.json")
+		}
+		if err := comparison.Save(path); err != nil {
+			die(err)
+		}
+		fmt.Printf("原子协议固定候选对照：%d 题，候选完整 %d；旧协议有效 %d、风险回答 %d、漏判 %d；新协议有效 %d、风险回答 %d、漏判 %d、模型错误 %d、调用 %d、平均耗时 %.0fms。分解召回待人工核对；报告 %s\n",
+			comparison.Cases, comparison.PoolComplete, comparison.OldValid, comparison.OldUnsafe, comparison.OldMisses,
+			comparison.NewValid, comparison.NewUnsafe, comparison.NewMisses, comparison.ModelErrors,
+			comparison.ModelCalls, comparison.AvgNewLatencyMs, path)
+		if comparison.ModelErrors > 0 {
+			die(fmt.Errorf("%d 条原子判定失败；逐题报告已保存", comparison.ModelErrors))
+		}
+	case "atomic-review":
+		if *atomicComparison == "" || *atomicReview == "" {
+			die(fmt.Errorf("atomic-review 需要 -atomic-comparison 和 -atomic-review"))
+		}
+		comparison, err := shadow.LoadAtomicComparison(*atomicComparison)
+		if err != nil {
+			die(err)
+		}
+		review, err := shadow.LoadAtomicReview(*atomicReview)
+		if err != nil {
+			die(err)
+		}
+		score, err := shadow.ScoreAtomicReview(comparison, review)
+		if err != nil {
+			die(err)
+		}
+		path := *shadowReport
+		if path == "" {
+			path = filepath.Join(*dataDir, "atomic-review-score.json")
+		}
+		if err := score.Save(path); err != nil {
+			die(err)
+		}
+		fmt.Printf("原子分解复核（%s）：逐项召回 %d/%d，逐项精度 %d/%d，整题金标覆盖 %d/%d，干净分解 %d/%d；排除模型错误 %d；报告 %s\n",
+			score.ReviewStatus, score.MatchedGold, score.GoldRequirements, score.MatchedModel, score.ModelRequirements,
+			score.AllGoldCoveredCases, score.ReviewedCases, score.CleanCases, score.ReviewedCases, score.ExcludedModelErrors, path)
 	case "vector-sync":
 		svc, collection, err := newHybridService(*envFile, *dataDir, *collectionFlag, ret)
 		if err != nil {
@@ -216,6 +300,8 @@ func main() {
   ragbot -as-of 日期 -scope-key 键 ask "问题"  按时间和适用范围提问（参数可省略）
   ragbot evaluate                 运行评测集，输出指标与逐条结果
   ragbot semantic-shadow          旁路审计候选池与可选模型判定（不改变 ask）
+  ragbot atomic-shadow            固定旧候选池，对照原子要求判定协议（不改变 ask）
+  ragbot atomic-review            人工对齐原子要求并计算分解指标
   ragbot vector-sync              生成子块向量并幂等写入 pgvector
   ragbot hybrid-search "问题"       对照 BM25、pgvector 与 RRF 排名
   ragbot hybrid-evaluate          按 eval/dense-retrieval.json 检索召回对照

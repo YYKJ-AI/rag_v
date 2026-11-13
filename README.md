@@ -55,6 +55,16 @@ go run ./cmd/ragbot -data data/demo -queries eval/gate-regression.json -shadow-p
 
 开发、保留和现场集须分开运行并指定不同的 `-shadow-report` 路径，否则默认报告会被覆盖。旁路当前只使用问句内时间和默认未指定适用范围；传入 `-as-of` 或 `-scope-key` 会明确报错。模型只可选择报告中已有的候选 ID；报告分别记录候选缺失、必要证据组覆盖、引用支持、无证据题误答、证据不合格的回答、安全拦截和模型失败。单次结果不能证明模型可靠；RRF 与 Reranker 仍未接入普通问答。
 
+`atomic-shadow` 从上述旧报告**复放同一批候选句**，按 [6 题开发锚点标注](eval/atomic-shadow.json) 对照“原子要求分解、逐项支持判断、规则聚合”和旧整组判定。标注支持组内全部具备、组间任选一组；G08 的“该附加要求”须连同疏导员主规则引用。实验只写被忽略的逐题报告，默认 `ask` 不变。运行时使用已配置的云端 Generator，因每题需多次调用，耗时与费用均高于旧协议；可先加 `-shadow-candidates-only` 仅复核旧报告和候选池。
+
+```bash
+go run ./cmd/ragbot -data data/demo -shadow-input data/demo/dev-pool8.json,data/demo/holdout-pool8.json,data/demo/gate-pool8.json -shadow-report data/demo/atomic-compare.json atomic-shadow
+```
+
+先分别运行三集 `semantic-shadow -shadow-pool 8` 并用 `-shadow-report` 保存为上例的三个输入文件。模型分解与人工原子要求的逐项对齐仍须复核；报告将槽位召回标为 `pending_manual_review`，不能把未审核的数字算作指标。当前 6 题开发锚点出现模型漏判、噪音证据和结构错误，原子协议尚未接入回答链路。
+
+若已有逐项人工对齐文件，可用 `atomic-review` 计算分解召回、精度和整题覆盖；它会核对提示词与候选池指纹、逐项模型输出，拒绝把模型失败题混进分母。2026-11-13 的 6 题开发锚点中，最终通用提示词得到 5 题有效判定、1 题结构错误；有效题中 0 题风险回答、3 题漏判，G10 的候选组本来不完整。作者事后对齐的**暂定**分解指标为召回 4/6、精度 4/5，排除 1 题模型错误；仍需独立复核，不能当作保留集或上线门槛。G10 的必要句从前 8 节的 0/2 变为前 20 节的 2/2，但候选句也从 20 增至 107；未运行该题的 pool20 云端协议对照。默认问答裁决保持不变。
+
 ## 实测结果与已知边界
 
 2026-11-12 在全新目录导入 12/12 份虚构资料并重新运行两套问题；`go test -count=1 ./...` 和 `go vet ./...` 均通过。新口径给每条有答案的问题标注必要证据片段，逐条检查引用是否属于人工确认的支持证据；旧口径只检查来源及摘录可定位。

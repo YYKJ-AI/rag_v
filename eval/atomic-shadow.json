@@ -1,0 +1,36 @@
+[
+  {
+    "id": "Q06", "query": "在中央广场办活动还要办什么手续", "expect_status": "answered",
+    "requirements": [
+      {"id":"report", "requirement":"在中央广场办活动的场地报备手续", "evidence_sets":[[{"document_id":"venue-notice","version":"v1","location":"第2节 场地报备要求","excerpt_contains":"向广场管理站报备活动规模与设备清单"}]]},
+      {"id":"permit", "requirement":"超过五百人时另须取得安全许可这一条件手续", "evidence_sets":[[{"document_id":"venue-notice","version":"v1","location":"第2节 场地报备要求","excerpt_contains":"超过五百人规模的活动须另行取得安全许可"}]]}
+    ]
+  },
+  {
+    "id": "Q23", "query": "星河工作坊报名费用是多少？", "expect_status": "insufficient_evidence",
+    "requirements": [{"id":"fee", "requirement":"星河工作坊向报名者收取的报名费用数值", "evidence_sets":[]}]
+  },
+  {
+    "id": "H13", "query": "星河工作坊活动对象的最低年龄是多少", "expect_status": "answered",
+    "requirements": [{"id":"age", "requirement":"星河工作坊活动对象的年龄下限", "evidence_sets":[[{"document_id":"workshop-plan","version":"v1","location":"第2节 项目安排","excerpt_contains":"面向年满十二周岁的社区居民"}]]}]
+  },
+  {
+    "id": "G04", "query": "报名页可以放身份证照片吗", "expect_status": "answered",
+    "requirements": [{"id":"display", "requirement":"蓝桥手作营报名页面是否允许展示申请人的证件照片", "evidence_sets":[[{"document_id":"bluebridge-venue","version":"v1","location":"第5节 对外告知","excerpt_contains":"不展示申请人的证件照片或联系方式"}]]}],
+    "note":"报名流程上传证件照片不满足报名页展示要求"
+  },
+  {
+    "id": "G08", "query": "人数恰好四十人需要疏导员吗", "expect_status": "answered",
+    "requirements": [{"id":"marshal", "requirement":"蓝桥手作营恰好四十人的场次是否须增加现场疏导员", "evidence_sets":[
+      [{"document_id":"bluebridge-venue","version":"v1","location":"第2节 场地报备","excerpt_contains":"超过四十人的场次"},{"document_id":"bluebridge-venue","version":"v1","location":"第2节 场地报备","excerpt_contains":"恰好四十人的场次不触发该附加要求"}],
+      [{"document_id":"bluebridge-venue","version":"v1","location":"第4节 人员与物料","excerpt_contains":"超过四十人时，另安排现场疏导员"},{"document_id":"bluebridge-venue","version":"v1","location":"第2节 场地报备","excerpt_contains":"恰好四十人的场次不触发该附加要求"}]
+    ]}], "note":"孤立例外句中的该附加要求没有自足指代，需同引疏导员主规则"
+  },
+  {
+    "id": "G10", "query": "蓝桥经费怎么管理", "expect_status": "answered",
+    "requirements": [
+      {"id":"funding", "requirement":"蓝桥手作营基础材料的经费来源", "evidence_sets":[[{"document_id":"bluebridge-budget","version":"v1","location":"第2节 报名费与材料费","excerpt_contains":"由项目预算承担"}]]},
+      {"id":"review", "requirement":"蓝桥手作营采购经费的财务复核责任", "evidence_sets":[[{"document_id":"bluebridge-budget","version":"v1","location":"第3节 预算明细","excerpt_contains":"采购总额由财务复核"}]]}
+    ]
+  }
+]

@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -19,7 +20,22 @@ var (
 
 // ValidateRewrite checks mechanical facts before an LLM rewrite is shown.
 // It is a conservative guard, not a semantic proof of support.
+// 校验失败统一包装 ErrValidationFailed（judge_miss 除外），供调用方区分
+// "表述越界"与"模型不可用"两类失败并给出不同的回退原因。
 func (g *Gateway) ValidateRewrite(baseAnswer string, evidence []string, output string) error {
+	if err := g.validateRewrite(baseAnswer, evidence, output); err != nil {
+		if errors.Is(err, ErrStatusChanged) {
+			return err
+		}
+		return fmt.Errorf("%w: %v", ErrValidationFailed, err)
+	}
+	return nil
+}
+
+// ErrValidationFailed 模型表述未通过机械事实核验（非状态篡改类）。
+var ErrValidationFailed = errors.New("模型表述未通过事实核验")
+
+func (g *Gateway) validateRewrite(baseAnswer string, evidence []string, output string) error {
 	output = strings.TrimSpace(output)
 	if output == "" || len(output) > 16<<10 {
 		return fmt.Errorf("模型表述为空或过长")

@@ -13,7 +13,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
+
+	"ragbot/internal/safety"
 )
 
 // ErrStatusChanged 模型改写把"可回答"改成了"无法回答"——语义判定层的漏判信号
@@ -96,19 +99,42 @@ func LoadConfigFromPath(path string) Config {
 // Valid 是否可以实际发起请求
 func (c Config) Valid() bool { return c.Enabled && c.BaseURL != "" && c.Model != "" }
 
-// Gateway OpenAI 兼容流式客户端
+// Gateway OpenAI 兼容流式客户端（含运行时启停开关：用于测试模型断线的真回退）
 type Gateway struct {
 	cfg    Config
 	client *http.Client
+	mu     sync.RWMutex
+	on     bool // 运行时开关；初始值取 cfg.Enabled，可被 SetEnabled 切换
 }
 
 func NewGateway(cfg Config) *Gateway {
-	return &Gateway{cfg: cfg, client: &http.Client{
+	return &Gateway{cfg: cfg, on: cfg.Enabled, client: &http.Client{
 		Timeout: cfg.Timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}}
+}
+
+// Enabled 运行时是否可用（开关 + 基础配置完备）。
+func (g *Gateway) Enabled() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.on && g.cfg.BaseURL != "" && g.cfg.Model != ""
+}
+
+// SetEnabled 运行时切换模型路线（false=离线模式，走确定性链路）。
+func (g *Gateway) SetEnabled(v bool) {
+	g.mu.Lock()
+	g.on = v
+	g.mu.Unlock()
+}
+
+// Info 当前模型配置摘要（密钥不出网关）。
+func (g *Gateway) Info() (provider, model string, configured bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.cfg.Provider, g.cfg.Model, g.cfg.BaseURL != "" && g.cfg.Model != ""
 }
 
 const systemGuard = "你是制度知识库的回答改写助手。规则：" +
@@ -121,8 +147,18 @@ const systemGuard = "你是制度知识库的回答改写助手。规则：" +
 // The upstream may stream, but onDelta receives only the completed response.
 // A truncated or malformed stream must never reach the client as a partial answer.
 func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer string, evidence []string, onDelta func(string)) (string, error) {
-	if !g.cfg.Valid() {
-		return "", fmt.Errorf("generator 未启用或配置不完整")
+	return g.streamAnswer(ctx, query, baseAnswer, evidence, "", onDelta)
+}
+
+// StreamAnswerWithHint 带核验反馈的重试入口：hint 会附加到用户消息末尾，
+// 用于把"上次改写为何被拒"反馈给模型（回退能回答的题，模型也应该能回答）。
+func (g *Gateway) StreamAnswerWithHint(ctx context.Context, query string, baseAnswer string, evidence []string, hint string, onDelta func(string)) (string, error) {
+	return g.streamAnswer(ctx, query, baseAnswer, evidence, hint, onDelta)
+}
+
+func (g *Gateway) streamAnswer(ctx context.Context, query string, baseAnswer string, evidence []string, hint string, onDelta func(string)) (string, error) {
+	if !g.Enabled() {
+		return "", fmt.Errorf("generator 未启用或已被离线开关关闭")
 	}
 	var ev strings.Builder
 	for i, e := range evidence {
@@ -131,8 +167,10 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 		}
 		fmt.Fprintf(&ev, "[%d] %s\n", i+1, e)
 	}
-	userContent := fmt.Sprintf("问题：%s\n\n既有回答（改写对象，事实以此为准）：\n%s\n\n证据摘录：\n%s",
-		query, baseAnswer, ev.String())
+	userContent := fmt.Sprintf("问题：%s\n\n既有回答（改写对象，事实以此为准）：\n%s\n\n证据摘录：\n%s", query, baseAnswer, ev.String())
+	if strings.TrimSpace(hint) != "" {
+		userContent += "\n\n核验反馈（必须遵守）：" + hint
+	}
 
 	payload := map[string]any{
 		"model":  g.cfg.Model,
@@ -212,4 +250,141 @@ func (g *Gateway) StreamAnswer(ctx context.Context, query string, baseAnswer str
 		onDelta(out)
 	}
 	return out, nil
+}
+
+// ---- 查询预处理层（在线）：改写 / 实体抽取 / 子问题拆分 / 时间提取 ----
+// 纪律：预处理只产出"检索计划"，供确定性管线消费；不裁决、不生成答案。
+// 防实体漂移：禁止引入原问题未提及的实体；子查询含指令样式文本时直接丢弃。
+
+// QueryPlan 查询预处理的结构化产出。
+type QueryPlan struct {
+	Rewritten  string   `json:"rewritten"`
+	Entities   []string `json:"entities"`
+	SubQueries []string `json:"sub_queries"`
+	Time       string   `json:"time"` // YYYY-MM-DD 或空
+}
+
+const preprocessSystem = "你是知识库检索的查询预处理助手。任务：对用户问题做轻度改写、实体抽取和子问题拆分。" +
+	"规则：1) 严格基于用户问题本身，禁止引入问题未提及的实体、活动名、机构、时间或主题；" +
+	"2) entities 抽取问题中出现的专名（活动/机构/场所/对象），没有则输出空数组；" +
+	"3) sub_queries 把复合问题拆成最多 4 个各自可独立检索的子问题；单一简单问题输出一条与原问题同义的即可；" +
+	"4) time 仅当问题明确包含日期或年份时输出（完整日期用 YYYY-MM-DD，仅年份用 YYYY-01-01），否则输出空字符串；" +
+	"5) rewritten 是去口语化的同义改写，不得改变含义，拿不准就与原问题相同；" +
+	"6) 只输出 JSON：{\"rewritten\":\"...\",\"entities\":[],\"sub_queries\":[],\"time\":\"\"}，不要输出任何解释。"
+
+// PreprocessQuery 在线预处理：模型产出结构化检索计划。
+// 任何失败（未启用/网络/解析/空产出）都返回 error，由调用方回退原查询直检。
+func (g *Gateway) PreprocessQuery(ctx context.Context, query string) (QueryPlan, error) {
+	if !g.Enabled() {
+		return QueryPlan{}, errors.New("generator 未启用或已被离线开关关闭")
+	}
+	payload := map[string]any{
+		"model":  g.cfg.Model,
+		"stream": false,
+		"messages": []map[string]string{
+			{"role": "system", "content": preprocessSystem},
+			{"role": "user", "content": "用户问题：" + query},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return QueryPlan{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.cfg.BaseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return QueryPlan{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if g.cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+g.cfg.APIKey)
+	}
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return QueryPlan{}, fmt.Errorf("预处理请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return QueryPlan{}, fmt.Errorf("预处理返回状态 %d", resp.StatusCode)
+	}
+	var completion struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&completion); err != nil {
+		return QueryPlan{}, fmt.Errorf("预处理响应格式错误")
+	}
+	if len(completion.Choices) == 0 {
+		return QueryPlan{}, errors.New("预处理无产出")
+	}
+	return parseQueryPlan(completion.Choices[0].Message.Content)
+}
+
+func parseQueryPlan(content string) (QueryPlan, error) {
+	text := strings.TrimSpace(content)
+	// 容错：剥掉 markdown 代码栅栏
+	if i := strings.Index(text, "{"); i >= 0 {
+		if j := strings.LastIndex(text, "}"); j > i {
+			text = text[i : j+1]
+		}
+	}
+	var plan QueryPlan
+	if err := json.Unmarshal([]byte(text), &plan); err != nil {
+		return QueryPlan{}, fmt.Errorf("预处理 JSON 解析失败")
+	}
+	// 实体：清洗、限量
+	plan.Entities = cleanList(plan.Entities, 8, 30)
+	// 子查询：清洗、限量、防注入（指令样式文本直接丢弃）
+	subs := cleanList(plan.SubQueries, 6, 60)
+	kept := make([]string, 0, len(subs))
+	for _, s := range subs {
+		if safety.IsDirectOverride(s) {
+			continue
+		}
+		kept = append(kept, s)
+		if len(kept) == 4 {
+			break
+		}
+	}
+	plan.SubQueries = kept
+	plan.Rewritten = strings.TrimSpace(plan.Rewritten)
+	if len([]rune(plan.Rewritten)) > 120 || safety.IsDirectOverride(plan.Rewritten) {
+		plan.Rewritten = ""
+	}
+	// 时间：合法日期才放行，否则置空交正则兜底
+	if plan.Time != "" {
+		if _, err := time.Parse("2006-01-02", plan.Time); err != nil {
+			plan.Time = ""
+		}
+	}
+	if len(plan.SubQueries) == 0 {
+		return plan, errors.New("预处理未产出可用子问题")
+	}
+	return plan, nil
+}
+
+func cleanList(items []string, maxCount, maxRunes int) []string {
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		it = strings.TrimSpace(it)
+		if it == "" || len([]rune(it)) > maxRunes {
+			continue
+		}
+		dup := false
+		for _, o := range out {
+			if o == it {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, it)
+		}
+		if len(out) == maxCount {
+			break
+		}
+	}
+	return out
 }

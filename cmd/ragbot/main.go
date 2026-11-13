@@ -100,7 +100,10 @@ func main() {
 		} else {
 			fmt.Println("模型表述层未启用（.env RAGBOT_GENERATOR_ENABLED=false 或配置不全），回答走确定性模板路径。")
 		}
-		srv := server.Handler(server.Deps{Engine: newEngine(ret), Ret: ret, WebDir: *webDir, Generator: gen})
+		srv := server.Handler(server.Deps{
+			Engine: newEngine(ret), Ret: ret, WebDir: *webDir, Generator: gen,
+			IngestDocument: makeUploadIngestor(st, ret, *envFile, *dataDir, *allowUnstructured),
+		})
 		fmt.Printf("ragbot 已启动: http://localhost%s （Ctrl+C 停止）\n", addr)
 		if err := http.ListenAndServe(addr, srv); err != nil {
 			die(err)
@@ -524,4 +527,74 @@ func printReport(rep *evaluate.Report) {
 func die(err error) {
 	fmt.Fprintln(os.Stderr, "错误：", err)
 	os.Exit(1)
+}
+
+// makeUploadIngestor 文档导入回调（serve 模式 /api/ingest 后端实现）。
+// 路线选择：确定性解析/切分/入库永远执行；向量路线仅在 .env 配置了向量环境
+// 且 pgvector 可达时执行（在线），否则如实标注 offline——导入不因向量失败回滚。
+func makeUploadIngestor(st *store.Store, ret *retriever.Retriever, envFile, dataDir string, allowUnstructured bool) func(string, []byte) (*server.IngestResult, error) {
+	uploadDir := filepath.Join(dataDir, "uploads")
+	_ = os.MkdirAll(uploadDir, 0755)
+	return func(filename string, raw []byte) (*server.IngestResult, error) {
+		base := filepath.Base(strings.ReplaceAll(filename, "\\", "/"))
+		meta, drafts, err := ingest.Parse(raw)
+		if err != nil && allowUnstructured {
+			meta, drafts, err = ingest.ParseUnstructured(raw, base)
+		}
+		if err != nil {
+			return nil, err
+		}
+		doc, secs, chunks, err := ingest.Build(meta, drafts)
+		if err != nil {
+			return nil, err
+		}
+		action, err := st.Ingest(doc, secs, chunks)
+		if err != nil {
+			return nil, err
+		}
+		if err := st.Save(); err != nil {
+			return nil, err
+		}
+		reloadIndex(ret, st)
+		res := &server.IngestResult{
+			Action: action, DocID: doc.ID, Version: doc.Version, Title: doc.Title,
+			Sections: len(secs), Chunks: len(chunks),
+			VectorSync: "offline（未配置向量环境，确定性链路已入库）",
+		}
+		// 留存原始上传件（审计/复现），文件名加时间戳防覆盖。
+		saved := filepath.Join(uploadDir, time.Now().Format("20060102-150405")+"-"+base)
+		if werr := os.WriteFile(saved, raw, 0644); werr == nil {
+			res.SavedAs = saved
+		}
+		// 在线路线：向量环境已配置 → 全量幂等同步 pgvector（新块嵌入，旧块跳过）。
+		if cfg, cerr := modelconfig.LoadVector(envFile); cerr == nil && cfg.DSN != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			collection := collectionNameFor(dataDir)
+			if vectors, oerr := vectorstore.Open(ctx, cfg.DSN, collection, cfg.Embedding.Model); oerr != nil {
+				res.VectorSync = "error: " + oerr.Error()
+			} else {
+				svc := &hybrid.Service{Embeddings: remoteembed.New(cfg.Embedding), Vectors: vectors}
+				stats, serr := svc.Sync(ctx, st.Docs, st.Sections, st.Chunks)
+				_ = vectors.Close(ctx)
+				if serr != nil {
+					res.VectorSync = "error: " + serr.Error()
+				} else {
+					res.VectorSync = fmt.Sprintf("synced embedded=%d skipped=%d pruned=%d rows=%d collection=%s",
+						stats.Embedded, stats.Skipped, stats.Pruned, stats.Rows, collection)
+				}
+			}
+		}
+		return res, nil
+	}
+}
+
+// collectionNameFor 与 newHybridService 一致的 collection 命名（按数据目录隔离）。
+func collectionNameFor(dataDir string) string {
+	absolute, err := filepath.Abs(dataDir)
+	if err != nil {
+		return "ragbot-default"
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(absolute)))
+	return "ragbot-" + hex.EncodeToString(sum[:8])
 }

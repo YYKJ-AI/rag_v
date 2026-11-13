@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,12 +19,27 @@ import (
 	"ragbot/internal/types"
 )
 
+// IngestResult 文档导入结果（确定性入库 + 可选向量同步状态）。
+type IngestResult struct {
+	Action     string `json:"action"`        // created / duplicate
+	DocID      string `json:"doc_id"`
+	Version    string `json:"version"`
+	Title      string `json:"title"`
+	Sections   int    `json:"sections"`
+	Chunks     int    `json:"chunks"`
+	VectorSync string `json:"vector_sync"` // synced … / offline … / error: …
+	SavedAs    string `json:"saved_as,omitempty"`
+}
+
 // Deps 服务依赖（main 组装后注入）
 type Deps struct {
 	Engine    *engine.Engine
 	Ret       *retriever.Retriever
 	WebDir    string
 	Generator *generator.Gateway // 可为 nil（未启用模型时走模板路径）
+	// IngestDocument 文档导入回调（main 实现：确定性解析入库 + 在线时向量化入 PG）。
+	// nil 时 /api/ingest 返回 501。
+	IngestDocument func(filename string, raw []byte) (*IngestResult, error)
 }
 
 // Handler 构建路由
@@ -32,6 +48,75 @@ func Handler(d Deps) http.Handler {
 
 	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "time": time.Now().Format(time.RFC3339)})
+	})
+
+	// 模型开关（运行时启停）：用于测试"模型断线/关闭"的真回退，
+	// 不需要重启进程或手改环境变量。
+	mux.HandleFunc("GET /api/generator/status", func(w http.ResponseWriter, r *http.Request) {
+		if d.Generator == nil {
+			writeJSON(w, map[string]any{"enabled": false, "configured": false})
+			return
+		}
+		provider, model, configured := d.Generator.Info()
+		writeJSON(w, map[string]any{
+			"enabled": d.Generator.Enabled(), "configured": configured,
+			"provider": provider, "model": model,
+		})
+	})
+	mux.HandleFunc("POST /api/generator/toggle", func(w http.ResponseWriter, r *http.Request) {
+		if d.Generator == nil {
+			httpError(w, http.StatusConflict, "模型表述层未配置（.env RAGBOT_GENERATOR_* 缺失），无法切换")
+			return
+		}
+		var req struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Enabled == nil {
+			httpError(w, http.StatusBadRequest, "请求体应为 {\"enabled\": true|false}")
+			return
+		}
+		d.Generator.SetEnabled(*req.Enabled)
+		provider, model, _ := d.Generator.Info()
+		writeJSON(w, map[string]any{"enabled": d.Generator.Enabled(), "provider": provider, "model": model})
+	})
+
+	// 文档导入入口：上传 Markdown → 确定性解析/切分入库 →
+	// 在线（向量环境已配置且 PG 可达）时同步向量化入 pgvector；离线时明确标注跳过。
+	mux.HandleFunc("POST /api/ingest", func(w http.ResponseWriter, r *http.Request) {
+		if d.IngestDocument == nil {
+			httpError(w, http.StatusNotImplemented, "导入回调未配置")
+			return
+		}
+		if err := r.ParseMultipartForm(4 << 20); err != nil {
+			httpError(w, http.StatusBadRequest, "请以 multipart/form-data 上传（字段名 file）")
+			return
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			httpError(w, http.StatusBadRequest, "缺少上传文件字段 file")
+			return
+		}
+		defer file.Close()
+		name := header.Filename
+		if !(strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".markdown")) {
+			httpError(w, http.StatusBadRequest, "仅支持 .md / .markdown 文件")
+			return
+		}
+		raw, err := io.ReadAll(io.LimitReader(file, 2<<20))
+		if err != nil {
+			httpError(w, http.StatusBadRequest, "读取上传内容失败")
+			return
+		}
+		if len(raw) == 0 {
+			httpError(w, http.StatusBadRequest, "上传文件为空")
+			return
+		}
+		res, err := d.IngestDocument(name, raw)
+		if err != nil {
+			httpError(w, http.StatusBadRequest, "导入失败："+err.Error())
+			return
+		}
+		writeJSON(w, res)
 	})
 
 	mux.HandleFunc("POST /api/ask", func(w http.ResponseWriter, r *http.Request) {
@@ -158,14 +243,40 @@ func Handler(d Deps) http.Handler {
 		}
 
 		start := time.Now()
-		ans := d.Engine.AnswerWithScope(req.Query, asOf, req.ScopeKey)
+
+		// 查询预处理层（在线）：模型对 query 做改写/实体抽取/子问题拆分/时间提取，
+		// 产出结构化检索计划；失败或离线时回退原问题直检（正则时间推断兜底）。
+		// 预处理只影响检索候选，不参与证据门控与裁决。
+		type planInfo struct {
+			Source     string   `json:"source"` // model / offline
+			Entities   []string `json:"entities,omitempty"`
+			SubQueries []string `json:"sub_queries,omitempty"`
+			Time       string   `json:"time,omitempty"`
+		}
+		plan := planInfo{Source: "offline"}
+		if d.Generator != nil && d.Generator.Enabled() && !safety.IsDirectOverride(req.Query) {
+			pctx, pcancel := context.WithTimeout(r.Context(), 12*time.Second)
+			p, perr := d.Generator.PreprocessQuery(pctx, req.Query)
+			pcancel()
+			if perr == nil {
+				plan = planInfo{Source: "model", Entities: p.Entities, SubQueries: p.SubQueries, Time: p.Time}
+				// 模型提取的时间点优先（合法日期已由 generator 校验），未提取时由引擎正则兜底。
+				if req.AsOf == "" && p.Time != "" {
+					if t, terr := time.Parse("2006-01-02", p.Time); terr == nil {
+						asOf = &t
+					}
+				}
+			}
+		}
+
+		ans := d.Engine.AnswerWithScopeSub(req.Query, asOf, req.ScopeKey, plan.SubQueries)
 
 		visible := ans.Answer
 		generatedBy := "template"
 		failureClass := "" // render_fallback=生成层失败降级 / judge_miss=判定层漏判信号 / 空=无降级
 		var fallbackReason string
 		// 拒答和冲突不调用模型；完整模型输出验证通过后才能到达客户端。
-		if ans.Status == "answered" && d.Generator != nil {
+		if ans.Status == "answered" && d.Generator != nil && d.Generator.Enabled() {
 			evidence := make([]string, 0, len(ans.Citations))
 			for _, c := range ans.Citations {
 				evidence = append(evidence, c.Excerpt)
@@ -179,12 +290,23 @@ func Handler(d Deps) http.Handler {
 			}
 			if unsafeEvidence {
 				fallbackReason = "引用资料包含指令样式文本，已停用模型改写"
+				failureClass = "render_fallback"
 			} else {
-				ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+				ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 				defer cancel()
 				llmText, err := d.Generator.StreamAnswer(ctx, req.Query, ans.Answer, evidence, nil)
 				if err == nil {
 					err = d.Generator.ValidateRewrite(ans.Answer, evidence, llmText)
+				}
+				if err != nil && !errors.Is(err, generator.ErrStatusChanged) {
+					// 表述校验未通过（或瞬时网络抖动）：把核验失败原因反馈给模型重试一次——
+					// "回退能回答的题，模型也应该能回答"，先给模型修正机会，而不是直接降级。
+					retryHint := "上一次改写未通过事实核验：" + err.Error() +
+						"。请严格贴近\"既有回答\"的原文表述，仅做流畅性微调；保留全部关键数字、版本与条件；不要概括、不要省略条款、不要使用\"等\"类宽泛表述。只输出改写后的正文。"
+					llmText, err = d.Generator.StreamAnswerWithHint(ctx, req.Query, ans.Answer, evidence, retryHint, nil)
+					if err == nil {
+						err = d.Generator.ValidateRewrite(ans.Answer, evidence, llmText)
+					}
 				}
 				if err != nil && errors.Is(err, generator.ErrStatusChanged) {
 					// 模型认为证据不支持所问事项——判定层漏判信号（judge_miss）。
@@ -197,7 +319,11 @@ func Handler(d Deps) http.Handler {
 					failureClass = "judge_miss"
 					fallbackReason = "生成模型判定证据不支持所问事项，已转为拒答"
 				} else if err != nil {
-					fallbackReason = "模型请求或表述校验失败"
+					if errors.Is(err, generator.ErrValidationFailed) {
+						fallbackReason = "模型表述两次未通过事实核验，已回退确定性模板"
+					} else {
+						fallbackReason = "模型不可用（网络或上游异常），已回退确定性模板"
+					}
 					failureClass = "render_fallback"
 				} else {
 					visible = llmText
@@ -207,19 +333,21 @@ func Handler(d Deps) http.Handler {
 		}
 		send("meta", map[string]any{
 			"status": ans.Status, "citations": ans.Citations,
-			"latency_ms":   time.Since(start).Milliseconds(),
-			"detected":     asOf == nil && engine.QueryHasInferredTime(req.Query),
-			"generated_by": generatedBy,
+			"latency_ms":    time.Since(start).Milliseconds(),
+			"detected":      asOf == nil && engine.QueryHasInferredTime(req.Query),
+			"generated_by":  generatedBy,
 			"failure_class": failureClass,
+			"plan":          plan,
 		})
 		send("delta", map[string]any{"text": visible})
 		if fallbackReason != "" {
 			send("notice", map[string]any{"fallback_reason": fallbackReason})
 		}
 		send("done", map[string]any{
-			"total_ms":     time.Since(start).Milliseconds(),
-			"generated_by": generatedBy,
+			"total_ms":      time.Since(start).Milliseconds(),
+			"generated_by":  generatedBy,
 			"failure_class": failureClass,
+			"plan_source":   plan.Source,
 		})
 	})
 

@@ -42,6 +42,13 @@ func (e *Engine) Answer(query string, asOf *time.Time) types.Answer {
 // AnswerWithScope answers using only documents whose scope_keys include scopeKey or *.
 // An empty scopeKey keeps the existing unscoped behavior.
 func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string) types.Answer {
+	return e.AnswerWithScopeSub(query, asOf, scopeKey, nil)
+}
+
+// AnswerWithScopeSub 带查询预处理计划作答：subQueries 为模型拆解的检索子问题。
+// 纪律：子问题只做"候选扩充"——主列表的检索分数、排序与门控全部保持原样；
+// 子问题命中的新候选节按各自子问题对齐抽取证据，门控/裁决仍以原问题为准。
+func (e *Engine) AnswerWithScopeSub(query string, asOf *time.Time, scopeKey string, subQueries []string) types.Answer {
 	if safety.IsDirectOverride(query) {
 		return types.Answer{Status: "insufficient_evidence", Answer: "该输入不是可由资料回答的问题，无法提供有出处的回答。"}
 	}
@@ -53,17 +60,40 @@ func (e *Engine) AnswerWithScope(query string, asOf *time.Time, scopeKey string)
 		today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)
 		asOf = &today
 	}
-	hits := e.filterByAsOf(e.R.SearchVerified(query, 0), asOf, scopeKey)
-	if len(hits) > 8 {
-		hits = hits[:8]
+	primary := e.filterByAsOf(e.R.SearchVerified(query, 0), asOf, scopeKey)
+	if len(primary) > 8 {
+		primary = primary[:8]
 	}
-	if e.weak(query, hits) {
+	if e.weak(query, primary) {
 		return types.Answer{
 			Status: "insufficient_evidence",
 			Answer: "资料中未找到覆盖该问题的充分依据，无法给出有出处的回答。",
 		}
 	}
-	evids := e.extract(query, hits)
+	// 子问题候选扩充：主列表之外，每个子问题取其 top4 候选节。
+	// 关键：证据抽取按"各列表自己的查询"对齐——某节可能被主查询召回
+	// 但其句子与原问题词面不对齐（语义鸿沟），子问题的对齐能把它救回来。
+	// 去重在证据级完成（节+句子），主列表的分数与排序保持原样。
+	hits := primary
+	evids := e.extract(query, primary)
+	for _, sq := range subQueries {
+		sq = strings.TrimSpace(sq)
+		if sq == "" || sq == query {
+			continue
+		}
+		sub := e.filterByAsOf(e.R.SearchVerified(sq, 0), asOf, scopeKey)
+		if len(sub) > 4 {
+			sub = sub[:4]
+		}
+		evids = append(evids, e.extract(sq, sub)...)
+		for _, h := range sub {
+			if !containsSectionID(hits, h.Section.ID) && len(hits) < 20 {
+				hits = append(hits, h)
+			}
+		}
+	}
+	// 证据级去重：同一父块的同一句子只保留一份。
+	evids = dedupeEvidence(evids)
 	if len(splitQueryClauses(query)) == 1 {
 		if answer, handled := e.answerFromPointer(query, evids, *asOf, scopeKey); handled {
 			return answer
@@ -784,4 +814,29 @@ func isTableRule(line string) bool {
 		}
 	}
 	return hasDash
+}
+
+// containsSectionID 判断候选列表里是否已有该父块（按 Section.ID）。
+func containsSectionID(hits []types.Hit, id string) bool {
+	for _, h := range hits {
+		if h.Section.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// dedupeEvidence 证据去重：同一父块的同一句子只保留一份（子问题扩充可能重复命中）。
+func dedupeEvidence(evids []evidence) []evidence {
+	seen := map[string]bool{}
+	out := make([]evidence, 0, len(evids))
+	for _, ev := range evids {
+		key := ev.Sec.ID + "|" + ev.Sentence
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, ev)
+	}
+	return out
 }

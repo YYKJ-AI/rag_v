@@ -80,3 +80,22 @@ func TestValidateRewriteRequiresEvidence(t *testing.T) {
 		t.Error("ValidateRewrite(without evidence) error = nil, want refusal")
 	}
 }
+
+func TestValidateRewriteAllowsSummarizationKeepsOneNumber(t *testing.T) {
+	g := generator.NewGateway(generator.Config{})
+	base := "根据资料：《申请费用》v1（费用标准）：\"申请费用为一百元。\"\n另有规定：《某通知》v1（其他）：\"公示期为五个工作日。\""
+	evidence := []string{"申请费用为一百元。", "公示期为五个工作日。"}
+	// 合法摘要：保留关键数值一百元，省略背景数值五个工作日
+	summarized := "申请费用为一百元，具体以受理窗口核验为准。"
+	if err := g.ValidateRewrite(base, evidence, summarized); err != nil {
+		t.Fatalf("合法摘要被误拒: %v", err)
+	}
+	// 空泛化：一个数值都不保留 → 必须拒绝
+	if err := g.ValidateRewrite(base, evidence, "申请费用以受理窗口核验为准。"); err == nil {
+		t.Fatal("全数值省略未触发空泛化拒绝")
+	}
+	// 编造数值 → 必须拒绝
+	if err := g.ValidateRewrite(base, evidence, "申请费用为三百元。"); err == nil {
+		t.Fatal("编造数值未被拒绝")
+	}
+}

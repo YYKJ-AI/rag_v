@@ -39,18 +39,28 @@ func (g *Gateway) ValidateRewrite(baseAnswer string, evidence []string, output s
 	if strings.TrimSpace(evidenceText) == "" {
 		return fmt.Errorf("模型表述缺少可核验的引用原文")
 	}
-	// 数字保留校验只针对"回答原文"中的数字——那是答案的事实主张。
-	// 证据摘录中的其余数字是背景材料，模型合法摘要时允许省略；
-	// 强制保留会让每次摘要式改写都失败（2026-11-13 实测回退率过高的根因）。
-	// 版本标记（v1/v2）由 citations 面板展示，不要求改写复述。
+	// 数字校验（2026-11-13 二次修正）：
+	// 1) 保留校验从"全部保留"放宽为"至少保留一个"——多引用模板答案含大量背景数字，
+	//    强制全保留使摘要式改写必然失败（LLM 路径结构性不可用的根因）；
+	// 2) 编造校验保留：改写中新出现的数字/来源必须可溯源。
+	// 版本标记（v1/v2）由 citations 面板展示，不参与校验。
 	factsBase := versionToken.ReplaceAllString(baseAnswer, "")
 	checkText := listOrdinal.ReplaceAllString(output, "")
 	facts := baseAnswer + "\n" + evidenceText
+	var baseNumbers []string
 	for _, pattern := range []*regexp.Regexp{arabicNumber, chineseQuantity} {
-		for _, token := range pattern.FindAllString(factsBase, -1) {
-			if !strings.Contains(output, token) {
-				return fmt.Errorf("模型表述删除了既有回答的数字或数量")
+		baseNumbers = append(baseNumbers, pattern.FindAllString(factsBase, -1)...)
+	}
+	if len(baseNumbers) > 0 {
+		kept := false
+		for _, token := range baseNumbers {
+			if strings.Contains(output, token) {
+				kept = true
+				break
 			}
+		}
+		if !kept {
+			return fmt.Errorf("模型表述未保留任何关键数值，存在空泛化风险")
 		}
 	}
 	// 输出中出现的新数字/标识仍必须能在回答或证据中找到（防编造）。
